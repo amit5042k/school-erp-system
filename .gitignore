@@ -11,3 +11,5 @@ build/
 coverage/
 backend/data/*.sqlite
 backend/data/*.db
+*.tsbuildinfo
+package-lock.json
