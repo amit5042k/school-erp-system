@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
+import ExploreOptions from '@/components/ExploreOptions';
 import { api } from '@/lib/api';
 
 export default function PayrollPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
   async function load() {
     try { setRows(await api('/payroll')); setTeachers(await api('/teachers')); }
@@ -37,23 +39,56 @@ export default function PayrollPage() {
 
   return (
     <Shell>
-      <h2 className="text-xl font-bold text-brand-700 mb-4">Payroll</h2>
-      {err && <div className="text-red-700 text-sm mb-2">{err}</div>}
+      <ExploreOptions
+        icon="💰"
+        title="Payroll Management"
+        subtitle="Salary, Slips & Statutory Reports — Explore Options"
+        breadcrumb={['Dashboard', 'Payroll Management']}
+        columns={3}
+        groups={[
+          { title: 'Salary', actions: [
+            { label: 'Staff Attendance', href: '/attendance' },
+            { label: 'Payslip', onClick: () => setShowForm(true) },
+            { label: 'Multiple Slips Generation', onClick: () => setShowForm(true) },
+            { label: 'Salary Report' },
+            { label: 'Employee Yearly Salary Report' },
+          ]},
+          { title: 'Statutory', actions: [
+            { label: 'ESI Report' },
+            { label: 'Monthly PF Report' },
+            { label: 'Bank Statement Report' },
+            { label: 'Payroll Summary Report' },
+          ]},
+          { title: 'Form 16', actions: [
+            { label: 'Upload Form 16' },
+            { label: 'Form 16 Details' },
+          ]},
+        ]}
+      />
 
-      <form onSubmit={add} className="card p-4 mb-4 grid md:grid-cols-5 gap-3 text-sm">
-        <div><label className="label">Staff</label>
-          <select className="input" name="teacher_id" required>
-            <option value="">-- Select --</option>
-            {teachers.map(t => <option key={t.id} value={t.id}>{t.employee_no} — {t.full_name}</option>)}
-          </select></div>
-        <div><label className="label">Month (YYYY-MM)</label><input className="input" name="month" placeholder="2026-04" required /></div>
-        <div><label className="label">Basic</label><input className="input" name="basic" type="number" required /></div>
-        <div><label className="label">Allowances</label><input className="input" name="allowances" type="number" defaultValue={0} /></div>
-        <div><label className="label">Deductions</label><input className="input" name="deductions" type="number" defaultValue={0} /></div>
-        <div className="md:col-span-5"><button className="btn btn-primary">Generate Payslip</button></div>
-      </form>
+      {err && <div className="text-red-700 text-sm mt-4">{err}</div>}
 
-      <div className="card p-4 overflow-x-auto">
+      {showForm && (
+        <form onSubmit={add} className="card p-4 mt-6 mb-4 grid md:grid-cols-5 gap-3 text-sm">
+          <div className="md:col-span-5 flex items-center justify-between">
+            <h3 className="font-semibold text-brand-700">Generate Payslip</h3>
+            <button type="button" className="text-xs text-gray-500 hover:underline" onClick={() => setShowForm(false)}>Cancel</button>
+          </div>
+          <div><label className="label">Staff</label>
+            <select className="input" name="teacher_id" required>
+              <option value="">-- Select --</option>
+              {teachers.map(t => <option key={t.id} value={t.id}>{t.employee_no} — {t.full_name}</option>)}
+            </select></div>
+          <div><label className="label">Month (YYYY-MM)</label><input className="input" name="month" placeholder="2026-04" required /></div>
+          <div><label className="label">Basic</label><input className="input" name="basic" type="number" required /></div>
+          <div><label className="label">Allowances</label><input className="input" name="allowances" type="number" defaultValue={0} /></div>
+          <div><label className="label">Deductions</label><input className="input" name="deductions" type="number" defaultValue={0} /></div>
+          <div className="md:col-span-5"><button className="btn btn-primary">Generate Payslip</button></div>
+        </form>
+      )}
+
+      <div className="card p-4 mt-6 overflow-x-auto">
+        <h3 className="font-semibold text-brand-700 mb-3">Payslips</h3>
         <table className="table"><thead><tr><th>Staff</th><th>Month</th><th>Basic</th><th>Allowances</th><th>Deductions</th><th>Net</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {rows.map(r => (
