@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import '../styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'MGN Jalandhar School ERP | Login',
+  title: 'EDUSECURE SCHOOL MANAGEMENT',
   description: 'School ERP System for MGN Urban Estate — powered by EduSecure-style platform',
 };
 

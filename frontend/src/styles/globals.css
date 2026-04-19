@@ -8,6 +8,31 @@ body {
   color: #1f2937;
 }
 
+/* ---- EduSecure off-canvas sidebar (mirrors their #wrapper/#nav/#main/.show-nav pattern) ---- */
+#wrapper { display: flex; min-height: 100vh; position: relative; }
+#nav {
+  width: 260px; flex-shrink: 0;
+  background: #fff; border-right: 1px solid #e5e7eb;
+  transition: transform 0.25s ease;
+}
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.toggle-nav {
+  display: none; background: transparent; border: 0; color: #fff;
+  font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 0.5rem;
+}
+@media (max-width: 900px) {
+  #nav {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 50;
+    transform: translateX(-100%);
+    box-shadow: 0 0 20px rgba(0,0,0,0.15);
+  }
+  #wrapper.show-nav #nav { transform: translateX(0); }
+  .toggle-nav { display: inline-block; }
+  #wrapper.show-nav::after {
+    content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 40;
+  }
+}
+
 .login-bg {
   background:
     linear-gradient(135deg, rgba(15, 60, 117, 0.85) 0%, rgba(26, 90, 168, 0.80) 100%),
