@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import '../styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'EDUSECURE SCHOOL MANAGEMENT',
-  description: 'School ERP System for MGN Urban Estate — powered by EduSecure-style platform',
+  title: 'School Management System',
+  description: 'School ERP — Next.js + Node.js',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

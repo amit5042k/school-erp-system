@@ -1,12 +1,7 @@
-# MGN Jalandhar — School ERP System
+# School ERP System
 
-A full-featured School ERP web application inspired by the EduSecure portal
-(`edusecure.org/mgnjalandhar`), rebuilt with a modern **Next.js 14** frontend
-and a **Node.js / Express** REST API backend.
-
-> Note: the reference site requires authentication; the exact pixel layout is
-> not duplicated. This build implements the canonical EduSecure module set
-> (login → dashboard → full ERP).
+A full-featured School ERP web application built with a modern
+**Next.js 14** frontend and a **Node.js / Express** REST API backend.
 
 ---
 
@@ -113,6 +108,7 @@ npm run dev
 | ------ | ---------------------------------- | -------- | --------------------------------- |
 | POST   | `/auth/login`                      | —        | Login, returns JWT                |
 | GET    | `/auth/me`                         | any      | Current user                      |
+| POST   | `/auth/change-password`            | any      | Change own password               |
 | GET    | `/dashboard`                       | any      | Role-specific dashboard summary   |
 | GET    | `/students`                        | any      | List students                     |
 | POST   | `/students`                        | admin    | Create student                    |
@@ -147,6 +143,8 @@ npm run dev
 /hostels, /hostel-rooms, /hostel-allotments                 — Hostel
 /inventory/items, /inventory/movements                      — Inventory
 /leaves, /payroll                                           — HR
+/leaves/balance/:teacherId, /leaves/:id/decision            — HR (leave workflow)
+/leave-allowances                                           — HR (allowances)
 /homework                                                   — Academics
 /communications                                             — SMS/Email log
 /documents                                                  — Downloads
@@ -157,4 +155,4 @@ npm run dev
 
 ## License
 
-For educational / internal use. Not affiliated with EduSecure or MGN.
+For educational / internal use.

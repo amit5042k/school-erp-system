@@ -46,21 +46,21 @@ const tx = db.transaction(() => {
     INSERT INTO users (username, password_hash, role, full_name, email, linked_id)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
-  const adminId = insertUser.run('admin', hash('admin123'), 'admin', 'Principal Admin', 'admin@mgnurban.edu', null).lastInsertRowid;
+  const adminId = insertUser.run('admin', hash('admin123'), 'admin', 'Principal Admin', 'admin@school.example', null).lastInsertRowid;
 
   // Teachers
   const insertTeacher = db.prepare(`
     INSERT INTO teachers (employee_no, full_name, subject, qualification, phone, email, department)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  const t1 = insertTeacher.run('EMP001', 'Ritu Sharma', 'Mathematics', 'M.Sc, B.Ed', '9810000001', 'ritu@mgnurban.edu', 'TEACHING').lastInsertRowid;
-  const t2 = insertTeacher.run('EMP002', 'Anil Verma', 'Science', 'M.Sc, B.Ed', '9810000002', 'anil@mgnurban.edu', 'TEACHING').lastInsertRowid;
-  const t3 = insertTeacher.run('EMP003', 'Pooja Nair', 'English', 'M.A, B.Ed', '9810000003', 'pooja@mgnurban.edu', 'TEACHING').lastInsertRowid;
-  const t4 = insertTeacher.run('EMP004', 'Suresh Bansal', 'Office Admin', 'B.Com', '9810000004', 'suresh@mgnjalandhar.edu', 'ADMIN').lastInsertRowid;
+  const t1 = insertTeacher.run('EMP001', 'Ritu Sharma', 'Mathematics', 'M.Sc, B.Ed', '9810000001', 'ritu@school.example', 'TEACHING').lastInsertRowid;
+  const t2 = insertTeacher.run('EMP002', 'Anil Verma', 'Science', 'M.Sc, B.Ed', '9810000002', 'anil@school.example', 'TEACHING').lastInsertRowid;
+  const t3 = insertTeacher.run('EMP003', 'Pooja Nair', 'English', 'M.A, B.Ed', '9810000003', 'pooja@school.example', 'TEACHING').lastInsertRowid;
+  const t4 = insertTeacher.run('EMP004', 'Suresh Bansal', 'Office Admin', 'B.Com', '9810000004', 'suresh@school.example', 'ADMIN').lastInsertRowid;
   const t5 = insertTeacher.run('EMP005', 'Balwinder Singh', 'Driver', 'Class-VIII', '9810000005', null, 'TRANSPORT').lastInsertRowid;
 
-  insertUser.run('ritu', hash('teacher123'), 'teacher', 'Ritu Sharma', 'ritu@mgnurban.edu', t1);
-  insertUser.run('anil', hash('teacher123'), 'teacher', 'Anil Verma', 'anil@mgnurban.edu', t2);
+  insertUser.run('ritu', hash('teacher123'), 'teacher', 'Ritu Sharma', 'ritu@school.example', t1);
+  insertUser.run('anil', hash('teacher123'), 'teacher', 'Anil Verma', 'anil@school.example', t2);
 
   // Classes
   const insertClass = db.prepare(`INSERT INTO classes (name, section, class_teacher_id) VALUES (?, ?, ?)`);
@@ -74,11 +74,11 @@ const tx = db.transaction(() => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const students = [
-    ['ADM2025001', 'Aarav Gupta', 'M', '2011-06-12', c8A, 1, 'Rakesh Gupta', 'Neha Gupta', '9811100001', 'Urban Estate, Phase 2'],
-    ['ADM2025002', 'Isha Malhotra', 'F', '2011-03-22', c8A, 2, 'Sanjay Malhotra', 'Priya Malhotra', '9811100002', 'Urban Estate, Phase 1'],
-    ['ADM2025003', 'Kabir Singh', 'M', '2010-09-05', c9B, 1, 'Harpreet Singh', 'Simran Kaur', '9811100003', 'Sector 4, Urban Estate'],
-    ['ADM2025004', 'Meera Iyer', 'F', '2010-11-14', c9B, 2, 'Ramesh Iyer', 'Lakshmi Iyer', '9811100004', 'Sector 6, Urban Estate'],
-    ['ADM2025005', 'Rohan Das', 'M', '2009-02-18', c10A, 1, 'Tapan Das', 'Anita Das', '9811100005', 'Sector 7, Urban Estate'],
+    ['ADM2025001', 'Aarav Gupta',    'M', '2011-06-12', c8A,  1, 'Rakesh Gupta',    'Neha Gupta',     '9811100001', 'Sector 2'],
+    ['ADM2025002', 'Isha Malhotra',  'F', '2011-03-22', c8A,  2, 'Sanjay Malhotra', 'Priya Malhotra', '9811100002', 'Sector 1'],
+    ['ADM2025003', 'Kabir Singh',    'M', '2010-09-05', c9B,  1, 'Harpreet Singh',  'Simran Kaur',    '9811100003', 'Sector 4'],
+    ['ADM2025004', 'Meera Iyer',     'F', '2010-11-14', c9B,  2, 'Ramesh Iyer',     'Lakshmi Iyer',   '9811100004', 'Sector 6'],
+    ['ADM2025005', 'Rohan Das',      'M', '2009-02-18', c10A, 1, 'Tapan Das',       'Anita Das',      '9811100005', 'Sector 7'],
   ];
   const studentIds = students.map(s => insertStudent.run(...s).lastInsertRowid);
 
@@ -122,7 +122,7 @@ const tx = db.transaction(() => {
   // Announcements
   const insertAnn = db.prepare(`INSERT INTO announcements (title, body, audience, posted_by) VALUES (?, ?, ?, ?)`);
   insertAnn.run('Welcome to Academic Year 2025-26', 'All students and parents are welcomed to the new session. Classes commence from 1st April.', 'all', adminId);
-  insertAnn.run('Annual Day Celebration', 'MGN Jalandhar Annual Day will be held on 25th April at the school auditorium.', 'all', adminId);
+  insertAnn.run('Annual Day Celebration', 'Annual Day will be held on 25th April at the school auditorium.', 'all', adminId);
   insertAnn.run('Parent-Teacher Meeting', 'PTM scheduled for Saturday 10:00 AM. Attendance mandatory.', 'all', adminId);
 
   // Enquiries
@@ -142,7 +142,7 @@ const tx = db.transaction(() => {
   // Postal
   const iP = db.prepare(`INSERT INTO postal (direction, reference_no, to_title, from_title, date, note) VALUES (?, ?, ?, ?, ?, ?)`);
   iP.run('dispatch', 'DSP-001', 'CBSE Regional Office', 'Principal', '2026-04-10', 'Affiliation renewal letter');
-  iP.run('receive', 'RCV-017', 'School', 'DEO Jalandhar', '2026-04-12', 'Circular on board exams');
+  iP.run('receive', 'RCV-017', 'School', 'District Education Office', '2026-04-12', 'Circular on board exams');
 
   // Call logs
   const iC = db.prepare(`INSERT INTO call_logs (caller_name, phone, direction, purpose, note) VALUES (?, ?, ?, ?, ?)`);
@@ -232,7 +232,7 @@ const tx = db.transaction(() => {
 
   // Communications
   db.prepare(`INSERT INTO communications (channel, audience, subject, body, recipient_count, sent_by) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run('sms', 'parent', 'PTM Reminder', 'Dear Parent, PTM on Saturday 10:00 AM. - MGN Jalandhar', 120, adminId);
+    .run('sms', 'parent', 'PTM Reminder', 'Dear Parent, PTM on Saturday 10:00 AM. - School Office', 120, adminId);
 
   // Documents
   db.prepare(`INSERT INTO documents (title, category, url, audience, uploaded_by) VALUES (?, ?, ?, ?, ?)`)

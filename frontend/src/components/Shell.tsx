@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { clearSession, getUser } from '@/lib/api';
 
 /**
- * Sidebar mirrors EduSecure's #ctl00_sidenav items (labels & order verbatim).
+ * Sidebar configuration.
  * Items with children render an expandable group; single items link directly.
  */
 type NavItem = { label: string; href?: string; icon?: string; children?: NavItem[] };
@@ -101,10 +101,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     <div id="wrapper" className={showNav ? 'show-nav' : ''}>
       <aside id="nav">
         <div className="bg-brand-700 text-white px-4 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white text-brand-700 grid place-items-center font-bold">MGN</div>
+          <div className="w-10 h-10 rounded-full bg-white text-brand-700 grid place-items-center font-bold">SE</div>
           <div>
-            <div className="font-bold text-sm leading-tight">MGN Jalandhar</div>
-            <div className="text-[10px] opacity-80">EDUSECURE SCHOOL MGMT</div>
+            <div className="font-bold text-sm leading-tight">School ERP</div>
+            <div className="text-[10px] opacity-80">SCHOOL MANAGEMENT</div>
           </div>
         </div>
         <nav className="p-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
@@ -171,8 +171,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div className="px-4 py-3 flex items-center gap-4">
             <button className="toggle-nav" onClick={(e) => { e.stopPropagation(); setShowNav(v => !v); }}>☰</button>
             <div className="flex-1 min-w-0">
-              <h1 className="font-bold leading-tight truncate">MGN Public School — Jalandhar</h1>
-              <p className="text-xs opacity-80 truncate">EDUSECURE School Management</p>
+              <h1 className="font-bold leading-tight truncate">School ERP</h1>
+              <p className="text-xs opacity-80 truncate">School Management System</p>
             </div>
 
             <div className="hidden md:flex items-center gap-3 text-sm">
@@ -242,8 +242,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
         <footer className="bg-white border-t">
           <div className="px-4 py-3 text-xs text-gray-500 flex justify-between">
-            <div>© {new Date().getFullYear()} MGN Public School, Jalandhar</div>
-            <div>Powered by EduSecure ERP</div>
+            <div>© {new Date().getFullYear()} School ERP</div>
+            <div>School Management System</div>
           </div>
         </footer>
       </div>

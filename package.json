@@ -2,7 +2,7 @@
   "name": "school-erp-system",
   "private": true,
   "version": "1.0.0",
-  "description": "School ERP System (MGN Urban Estate) - Next.js + Node.js, inspired by EduSecure",
+  "description": "School ERP System — Next.js + Node.js",
   "workspaces": ["backend", "frontend"],
   "scripts": {
     "dev": "npm-run-all --parallel dev:backend dev:frontend",

@@ -37,19 +37,19 @@ export default function LoginPage() {
       <header className="bg-white/95 border-b border-gray-200 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center gap-4 px-4 py-3">
           <div className="w-14 h-14 rounded-full bg-brand-600 text-white grid place-items-center font-bold text-xl shadow">
-            MGN
+            SE
           </div>
           <div className="flex-1">
             <h1 className="text-brand-700 font-bold text-lg sm:text-xl leading-tight">
-              MGN PUBLIC SCHOOL, JALANDHAR
+              SCHOOL ERP
             </h1>
             <p className="text-xs sm:text-sm text-gray-600">
-              Affiliated to CBSE &nbsp;|&nbsp; Urban Estate, Phase-II &nbsp;|&nbsp; Excellence in Education
+              School Management System &nbsp;|&nbsp; Excellence in Education
             </p>
           </div>
           <div className="hidden sm:block text-right">
             <p className="text-xs text-gray-500">Powered by</p>
-            <p className="text-sm font-semibold text-brand-600">EduSecure ERP</p>
+            <p className="text-sm font-semibold text-brand-600">School ERP</p>
           </div>
         </div>
       </header>
@@ -61,7 +61,7 @@ export default function LoginPage() {
           <div className="hidden md:flex flex-col justify-center bg-gradient-to-br from-brand-700 to-brand-500 text-white p-10">
             <h2 className="text-3xl font-bold mb-3">Welcome Back</h2>
             <p className="opacity-90 mb-6 leading-relaxed">
-              Sign in to the MGN Jalandhar School ERP portal to access academic records,
+              Sign in to the School ERP portal to access academic records,
               attendance, fee payments, timetable and announcements.
             </p>
             <ul className="space-y-2 text-sm opacity-95">
@@ -155,8 +155,8 @@ export default function LoginPage() {
       {/* Footer */}
       <footer className="bg-white/95 border-t border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-3 text-xs text-gray-600 flex flex-col sm:flex-row justify-between gap-1">
-          <div>© {new Date().getFullYear()} MGN Public School, Jalandhar. All rights reserved.</div>
-          <div>Designed &amp; Powered by EduSecure ERP</div>
+          <div>© {new Date().getFullYear()} School ERP. All rights reserved.</div>
+          <div>School Management System</div>
         </div>
       </footer>
     </div>

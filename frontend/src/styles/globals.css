@@ -8,7 +8,7 @@ body {
   color: #1f2937;
 }
 
-/* ---- EduSecure off-canvas sidebar (mirrors their #wrapper/#nav/#main/.show-nav pattern) ---- */
+/* ---- Off-canvas sidebar (#wrapper/#nav/#main/.show-nav pattern) ---- */
 #wrapper { display: flex; min-height: 100vh; position: relative; }
 #nav {
   width: 260px; flex-shrink: 0;

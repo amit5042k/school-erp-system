@@ -112,7 +112,7 @@ export default function LeavesPage() {
 
   return (
     <Shell>
-      {/* Breadcrumb + title, matching EduSecure */}
+      {/* Breadcrumb + title */}
       <div className="text-xs text-gray-500 mb-1">Leave Management &nbsp;›&nbsp; Approve/Reject Leaves</div>
       <h2 className="text-xl font-bold text-brand-700 mb-1">Approve/Reject Leave</h2>
       <div className="text-sm text-gray-500 mb-4">Staff Leaves Report</div>

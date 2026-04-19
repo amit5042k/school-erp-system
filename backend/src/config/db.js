@@ -381,7 +381,7 @@ function init() {
     /* -------- Settings -------- */
     CREATE TABLE IF NOT EXISTS school_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
-      school_name TEXT NOT NULL DEFAULT 'MGN Public School, Jalandhar',
+      school_name TEXT NOT NULL DEFAULT 'School ERP',
       address TEXT,
       phone TEXT,
       email TEXT,
@@ -390,7 +390,7 @@ function init() {
       logo_url TEXT
     );
     INSERT OR IGNORE INTO school_settings (id, school_name, address, phone, email, website, academic_year)
-    VALUES (1, 'MGN Public School, Jalandhar', 'Urban Estate Phase-II, Jalandhar', '+91-181-0000000', 'office@mgnjalandhar.edu', 'https://edusecure.org/mgnjalandhar', '2025-26');
+    VALUES (1, 'School ERP', 'Head Office Address', '+91-0000000000', 'office@school.example', 'https://school.example', '2025-26');
   `);
 
   // Additive migrations for pre-existing databases (SQLite has no ADD COLUMN IF NOT EXISTS)

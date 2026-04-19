@@ -15,7 +15,7 @@ export default function ComingSoon({ title, breadcrumb, description }: {
         <div className="text-5xl mb-3">🛠</div>
         <div className="font-semibold text-brand-700 mb-1">Module under construction</div>
         <p className="text-sm text-gray-600 max-w-md mx-auto">
-          {description || 'This module is part of the EduSecure feature set and will be wired up to the backend soon. The navigation item is live so the menu mirrors the reference portal.'}
+          {description || 'This module will be wired up to the backend soon. The navigation entry is live so the menu stays complete.'}
         </p>
       </div>
     </Shell>
