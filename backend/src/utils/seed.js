@@ -7,6 +7,29 @@ function hash(p) { return bcrypt.hashSync(p, 10); }
 const tx = db.transaction(() => {
   // Wipe (dev only)
   db.exec(`
+    DELETE FROM hostel_allotments;
+    DELETE FROM hostel_rooms;
+    DELETE FROM hostels;
+    DELETE FROM student_transport;
+    DELETE FROM routes;
+    DELETE FROM vehicles;
+    DELETE FROM book_issues;
+    DELETE FROM books;
+    DELETE FROM marks;
+    DELETE FROM exam_schedule;
+    DELETE FROM exams;
+    DELETE FROM inventory_movements;
+    DELETE FROM inventory_items;
+    DELETE FROM payroll;
+    DELETE FROM staff_leaves;
+    DELETE FROM homework;
+    DELETE FROM documents;
+    DELETE FROM communications;
+    DELETE FROM call_logs;
+    DELETE FROM postal;
+    DELETE FROM complaints;
+    DELETE FROM visitors;
+    DELETE FROM enquiries;
     DELETE FROM attendance;
     DELETE FROM fees;
     DELETE FROM timetable;
@@ -97,8 +120,92 @@ const tx = db.transaction(() => {
   // Announcements
   const insertAnn = db.prepare(`INSERT INTO announcements (title, body, audience, posted_by) VALUES (?, ?, ?, ?)`);
   insertAnn.run('Welcome to Academic Year 2025-26', 'All students and parents are welcomed to the new session. Classes commence from 1st April.', 'all', adminId);
-  insertAnn.run('Annual Day Celebration', 'MGN Urban Estate Annual Day will be held on 25th April at the school auditorium.', 'all', adminId);
+  insertAnn.run('Annual Day Celebration', 'MGN Jalandhar Annual Day will be held on 25th April at the school auditorium.', 'all', adminId);
   insertAnn.run('Parent-Teacher Meeting', 'PTM scheduled for Saturday 10:00 AM. Attendance mandatory.', 'all', adminId);
+
+  // Enquiries
+  const iE = db.prepare(`INSERT INTO enquiries (name, parent_name, phone, email, class_seeking, source, status) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  iE.run('Arjun Kapoor', 'Vishal Kapoor', '9811200001', 'kapoor@example.com', 'Class 6', 'walk-in', 'open');
+  iE.run('Priya Seth', 'Deepak Seth', '9811200002', 'seth@example.com', 'Class 8', 'referral', 'contacted');
+
+  // Visitors
+  const iV = db.prepare(`INSERT INTO visitors (visitor_name, phone, purpose, to_meet, id_proof) VALUES (?, ?, ?, ?, ?)`);
+  iV.run('Ramesh Kumar', '9999800001', 'Admission enquiry', 'Principal', 'Aadhar ****1234');
+  iV.run('Suman Devi', '9999800002', 'Fee collection query', 'Accounts', 'Aadhar ****5678');
+
+  // Complaints
+  db.prepare(`INSERT INTO complaints (complainant, phone, type, description, status) VALUES (?, ?, ?, ?, ?)`)
+    .run('Parent of ADM2025002', '9811100002', 'Transport', 'Bus on Route A is consistently late by 15 minutes.', 'open');
+
+  // Postal
+  const iP = db.prepare(`INSERT INTO postal (direction, reference_no, to_title, from_title, date, note) VALUES (?, ?, ?, ?, ?, ?)`);
+  iP.run('dispatch', 'DSP-001', 'CBSE Regional Office', 'Principal', '2026-04-10', 'Affiliation renewal letter');
+  iP.run('receive', 'RCV-017', 'School', 'DEO Jalandhar', '2026-04-12', 'Circular on board exams');
+
+  // Call logs
+  const iC = db.prepare(`INSERT INTO call_logs (caller_name, phone, direction, purpose, note) VALUES (?, ?, ?, ?, ?)`);
+  iC.run('Mr. Gupta', '9811100001', 'incoming', 'Bus route query', 'Assured follow-up with transport dept.');
+  iC.run('Anil Sir', '9810000002', 'outgoing', 'PTM reminder', 'Called parents of 9-B for Saturday PTM.');
+
+  // Exams & marks
+  const examId = db.prepare(`INSERT INTO exams (name, term, start_date, end_date) VALUES (?, ?, ?, ?)`)
+    .run('Mid Term 2025-26', 'Term 1', '2025-08-20', '2025-08-30').lastInsertRowid;
+  const iSch = db.prepare(`INSERT INTO exam_schedule (exam_id, class_id, subject, date, start_time, end_time, max_marks) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  iSch.run(examId, c8A, 'Mathematics', '2025-08-20', '09:00', '12:00', 100);
+  iSch.run(examId, c8A, 'Science', '2025-08-22', '09:00', '12:00', 100);
+  iSch.run(examId, c8A, 'English', '2025-08-24', '09:00', '12:00', 100);
+  const iM = db.prepare(`INSERT INTO marks (exam_id, student_id, subject, marks_obtained, max_marks, grade) VALUES (?, ?, ?, ?, ?, ?)`);
+  for (const sid of studentIds.slice(0, 2)) {
+    iM.run(examId, sid, 'Mathematics', 78 + Math.floor(Math.random() * 15), 100, 'A');
+    iM.run(examId, sid, 'Science', 72 + Math.floor(Math.random() * 20), 100, 'A');
+    iM.run(examId, sid, 'English', 80 + Math.floor(Math.random() * 10), 100, 'A+');
+  }
+
+  // Library
+  const iBk = db.prepare(`INSERT INTO books (book_no, title, author, publisher, category, qty_total, qty_available, rack, price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const bk1 = iBk.run('LIB-001', 'NCERT Mathematics Class 8', 'NCERT', 'NCERT', 'Textbook', 5, 5, 'R1', 120).lastInsertRowid;
+  const bk2 = iBk.run('LIB-002', 'Wings of Fire', 'A.P.J. Abdul Kalam', 'Universities Press', 'Biography', 3, 3, 'R2', 350).lastInsertRowid;
+  iBk.run('LIB-003', 'Panchatantra Stories', 'Vishnu Sharma', 'DK', 'Fiction', 4, 4, 'R3', 250);
+  db.prepare(`INSERT INTO book_issues (book_id, student_id, due_date) VALUES (?, ?, ?)`).run(bk1, studentIds[0], '2026-05-01');
+  db.prepare('UPDATE books SET qty_available = qty_available - 1 WHERE id = ?').run(bk1);
+
+  // Transport
+  const veh1 = db.prepare(`INSERT INTO vehicles (vehicle_no, model, capacity, driver_name, driver_phone, license_no) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run('PB08-AB-1234', 'Tata Starbus', 40, 'Balwinder Singh', '9876500001', 'DL-PB-00012345').lastInsertRowid;
+  const rt1 = db.prepare(`INSERT INTO routes (name, stops, fare, vehicle_id) VALUES (?, ?, ?, ?)`)
+    .run('Route A — Model Town', 'Model Town, Adarsh Nagar, Guru Nanak Pura', 1500, veh1).lastInsertRowid;
+  db.prepare(`INSERT INTO student_transport (student_id, route_id, pickup_stop) VALUES (?, ?, ?)`).run(studentIds[0], rt1, 'Model Town');
+
+  // Hostel
+  const h1 = db.prepare(`INSERT INTO hostels (name, type, warden) VALUES (?, ?, ?)`).run('Boys Hostel A', 'boys', 'Mr. Kewal Sharma').lastInsertRowid;
+  const r1 = db.prepare(`INSERT INTO hostel_rooms (hostel_id, room_no, capacity, fee) VALUES (?, ?, ?, ?)`).run(h1, '101', 2, 4000).lastInsertRowid;
+  db.prepare(`INSERT INTO hostel_rooms (hostel_id, room_no, capacity, fee) VALUES (?, ?, ?, ?)`).run(h1, '102', 2, 4000);
+  db.prepare(`INSERT INTO hostel_allotments (student_id, room_id) VALUES (?, ?)`).run(studentIds[4], r1);
+
+  // Inventory
+  const iI = db.prepare(`INSERT INTO inventory_items (sku, name, category, unit, qty_on_hand, reorder_level, unit_price) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const item1 = iI.run('STA-001', 'A4 Sheet Ream', 'Stationery', 'ream', 40, 10, 260).lastInsertRowid;
+  iI.run('STA-002', 'Blue Pen', 'Stationery', 'pcs', 8, 50, 10);
+  iI.run('CLN-001', 'Hand Sanitizer 500ml', 'Cleaning', 'bottle', 30, 10, 120);
+  db.prepare(`INSERT INTO inventory_movements (item_id, movement_type, qty, reference) VALUES (?, ?, ?, ?)`).run(item1, 'purchase', 40, 'PO-2025-001');
+
+  // HR
+  db.prepare(`INSERT INTO staff_leaves (teacher_id, leave_type, from_date, to_date, reason, status) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(t1, 'Casual', '2026-04-22', '2026-04-23', 'Personal work', 'pending');
+  db.prepare(`INSERT INTO payroll (teacher_id, month, basic, allowances, deductions, net_pay, status) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(t1, '2026-03', 45000, 8000, 3000, 50000, 'paid');
+
+  // Homework
+  db.prepare(`INSERT INTO homework (class_id, subject, title, description, due_date, teacher_id) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(c8A, 'Mathematics', 'Algebra worksheet', 'Complete exercises 3.1 to 3.4 from NCERT.', '2026-04-25', t1);
+
+  // Communications
+  db.prepare(`INSERT INTO communications (channel, audience, subject, body, recipient_count, sent_by) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run('sms', 'parent', 'PTM Reminder', 'Dear Parent, PTM on Saturday 10:00 AM. - MGN Jalandhar', 120, adminId);
+
+  // Documents
+  db.prepare(`INSERT INTO documents (title, category, url, audience, uploaded_by) VALUES (?, ?, ?, ?, ?)`)
+    .run('Annual Calendar 2025-26', 'circular', 'https://example.org/calendar.pdf', 'all', adminId);
 });
 
 tx();

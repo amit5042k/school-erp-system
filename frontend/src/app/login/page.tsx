@@ -41,7 +41,7 @@ export default function LoginPage() {
           </div>
           <div className="flex-1">
             <h1 className="text-brand-700 font-bold text-lg sm:text-xl leading-tight">
-              MGN PUBLIC SCHOOL, URBAN ESTATE
+              MGN PUBLIC SCHOOL, JALANDHAR
             </h1>
             <p className="text-xs sm:text-sm text-gray-600">
               Affiliated to CBSE &nbsp;|&nbsp; Urban Estate, Phase-II &nbsp;|&nbsp; Excellence in Education
@@ -61,7 +61,7 @@ export default function LoginPage() {
           <div className="hidden md:flex flex-col justify-center bg-gradient-to-br from-brand-700 to-brand-500 text-white p-10">
             <h2 className="text-3xl font-bold mb-3">Welcome Back</h2>
             <p className="opacity-90 mb-6 leading-relaxed">
-              Sign in to the MGN Urban Estate School ERP portal to access academic records,
+              Sign in to the MGN Jalandhar School ERP portal to access academic records,
               attendance, fee payments, timetable and announcements.
             </p>
             <ul className="space-y-2 text-sm opacity-95">
@@ -155,7 +155,7 @@ export default function LoginPage() {
       {/* Footer */}
       <footer className="bg-white/95 border-t border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-3 text-xs text-gray-600 flex flex-col sm:flex-row justify-between gap-1">
-          <div>© {new Date().getFullYear()} MGN Public School, Urban Estate. All rights reserved.</div>
+          <div>© {new Date().getFullYear()} MGN Public School, Jalandhar. All rights reserved.</div>
           <div>Designed &amp; Powered by EduSecure ERP</div>
         </div>
       </footer>

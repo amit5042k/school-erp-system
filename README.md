@@ -1,31 +1,37 @@
-# MGN Urban Estate — School ERP System
+# MGN Jalandhar — School ERP System
 
-A School ERP web application inspired by the EduSecure-style portal
-(`www.edusecure.org/mgnurbanestate/login/login.aspx`), rebuilt with a modern
-**Next.js 14** frontend and a **Node.js / Express** REST API backend.
+A full-featured School ERP web application inspired by the EduSecure portal
+(`edusecure.org/mgnjalandhar`), rebuilt with a modern **Next.js 14** frontend
+and a **Node.js / Express** REST API backend.
 
-> Note: the original reference site requires authentication and could not be
-> scraped, so the exact pixel-level look is not duplicated. The login screen is
-> modeled on the typical EduSecure portal (school header, side banner, role
-> selector, User ID / Password form, footer) and the rest of the ERP provides
-> the standard modules expected in such systems.
+> Note: the reference site requires authentication; the exact pixel layout is
+> not duplicated. This build implements the canonical EduSecure module set
+> (login → dashboard → full ERP).
 
 ---
 
-## Features
+## Modules
 
-**Roles:** Admin, Teacher, Student, Parent (UI ready, login wired).
+**Roles:** Admin, Teacher, Student, Parent.
 
-**Modules**
-
-- Role-based **Login** (JWT auth)
-- **Dashboard** — totals, attendance snapshot, fees, announcements
-- **Students** — list, search, add (admin)
-- **Teachers / Staff** — list, add (admin)
-- **Attendance** — mark per class per date (admin/teacher), view by student
-- **Fees** — per-student records, mark paid, receipts
-- **Time Table** — per-class weekly view
-- **Announcements / Circulars** — post, list, audience targeting
+- **Auth & Dashboard** — JWT login, role-aware dashboard, summary widgets.
+- **Admissions** — Enquiries (open/contacted/converted/closed), follow-ups.
+- **Students** — list, search, create, class assignment.
+- **Teachers / HR** — teacher directory, staff leaves (approve/reject), payroll.
+- **Academics** — Attendance, Time Table, Homework / Assignments, Exams,
+  Exam Schedule, Marks Entry per exam / class / subject.
+- **Fees** — per-student fee rows, mark paid, receipt generation.
+- **Front Office** — Visitor book, Complaints, Postal (dispatch / receive),
+  Phone Call Log.
+- **Library** — Books catalog, Issue / Return with stock tracking.
+- **Transport** — Vehicles, Routes, Student-to-Route assignment.
+- **Hostel** — Hostels, Rooms, Allotments.
+- **Inventory** — Items (with reorder level), Purchase / Issue / Adjust
+  movements.
+- **Communication** — Announcements, SMS / Email / Push log, Documents &
+  downloads.
+- **Administration** — Users & Roles (create/disable/reset password), School
+  Settings (name, academic year, contact, logo), Reports summary.
 
 **Stack**
 
@@ -130,6 +136,24 @@ npm run dev
 - Swap SQLite for Postgres/MySQL by replacing `backend/src/config/db.js`.
 - Put the backend behind HTTPS; `helmet` and rate-limit are already wired.
 - Build the frontend with `npm run build && npm run start`.
+
+## Extended API summary (in addition to base)
+
+```
+/enquiries, /visitors, /complaints, /postal, /calls        — Front Office
+/exams, /exam-schedule, /marks                              — Examinations
+/books, /book-issues, /book-issues/:id/return               — Library
+/vehicles, /routes, /student-transport                      — Transport
+/hostels, /hostel-rooms, /hostel-allotments                 — Hostel
+/inventory/items, /inventory/movements                      — Inventory
+/leaves, /payroll                                           — HR
+/homework                                                   — Academics
+/communications                                             — SMS/Email log
+/documents                                                  — Downloads
+/users, /users/:id/active, /users/:id/reset-password        — User mgmt
+/settings                                                   — School config
+/reports/summary                                            — KPI rollup
+```
 
 ## License
 
