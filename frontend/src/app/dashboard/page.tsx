@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, getUser } from '@/lib/api';
@@ -12,6 +13,51 @@ type AdminSummary = {
     fees_pending: number; fees_collected: number;
   };
   announcements: { id: number; title: string; posted_at: string }[];
+};
+
+const MODULE_TILES: { label: string; href: string; icon: string; tone: string }[] = [
+  { label: 'Dashboard',               href: '/dashboard',      icon: '▦',  tone: 'blue' },
+  { label: 'Student',                 href: '/students',       icon: '👤', tone: 'teal' },
+  { label: 'Academic Communication',  href: '/homework',       icon: '📚', tone: 'indigo' },
+  { label: 'Attendance',              href: '/attendance',     icon: '✓',  tone: 'green' },
+  { label: 'Finance',                 href: '/fees',           icon: '₹',  tone: 'amber' },
+  { label: 'Examination',             href: '/exams',          icon: '🏆', tone: 'rose' },
+  { label: 'Transport',               href: '/transport',      icon: '🚌', tone: 'sky' },
+  { label: 'Settings',                href: '/settings',       icon: '⚙',  tone: 'slate' },
+  { label: 'Human Resource',          href: '/teachers',       icon: '👥', tone: 'violet' },
+  { label: 'Communication',           href: '/communications', icon: '💬', tone: 'cyan' },
+  { label: 'Online Survey',           href: '/surveys',        icon: '🗳', tone: 'emerald' },
+  { label: 'Suggestion Box',          href: '/suggestions',    icon: '💡', tone: 'yellow' },
+  { label: 'Photos / Videos',         href: '/activities',     icon: '🎬', tone: 'pink' },
+  { label: 'Library Management',      href: '/library',        icon: '📖', tone: 'orange' },
+  { label: 'Front Office',            href: '/visitors',       icon: '🏢', tone: 'lime' },
+  { label: 'School Calendar',         href: '/calendar',       icon: '📅', tone: 'fuchsia' },
+  { label: 'Payroll Management',      href: '/payroll',        icon: '💰', tone: 'green' },
+  { label: 'Inventory',               href: '/inventory',      icon: '📦', tone: 'brown' },
+  { label: 'Announcements',           href: '/announcements',  icon: '📣', tone: 'red' },
+  { label: 'Documents',               href: '/documents',      icon: '📄', tone: 'gray' },
+];
+
+const TONE_STYLES: Record<string, string> = {
+  blue: 'bg-blue-50 text-blue-700 border-blue-200',
+  teal: 'bg-teal-50 text-teal-700 border-teal-200',
+  indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  green: 'bg-green-50 text-green-700 border-green-200',
+  amber: 'bg-amber-50 text-amber-700 border-amber-200',
+  rose: 'bg-rose-50 text-rose-700 border-rose-200',
+  sky: 'bg-sky-50 text-sky-700 border-sky-200',
+  slate: 'bg-slate-50 text-slate-700 border-slate-200',
+  violet: 'bg-violet-50 text-violet-700 border-violet-200',
+  cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  yellow: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  pink: 'bg-pink-50 text-pink-700 border-pink-200',
+  orange: 'bg-orange-50 text-orange-700 border-orange-200',
+  lime: 'bg-lime-50 text-lime-700 border-lime-200',
+  fuchsia: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+  red: 'bg-red-50 text-red-700 border-red-200',
+  gray: 'bg-gray-50 text-gray-700 border-gray-200',
+  brown: 'bg-amber-100 text-amber-900 border-amber-300',
 };
 
 type StudentSummary = {
@@ -48,6 +94,24 @@ export default function DashboardPage() {
             <Stat label="Absent Today" value={data.totals.absent_today} tone="red" />
             <Stat label="Fees Collected" value={`₹${data.totals.fees_collected}`} tone="green" />
             <Stat label="Fees Pending" value={`₹${data.totals.fees_pending}`} tone="amber" />
+          </div>
+
+          {/* Module quick-launch tiles */}
+          <div className="card p-4 mb-6">
+            <h3 className="font-semibold text-brand-700 mb-3">Home</h3>
+            <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {MODULE_TILES.map(t => (
+                <li key={t.label}>
+                  <Link
+                    href={t.href}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-lg border hover:shadow-md transition ${TONE_STYLES[t.tone] || TONE_STYLES.blue}`}
+                  >
+                    <span className="text-3xl">{t.icon}</span>
+                    <span className="text-xs font-semibold text-center leading-tight">{t.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div className="card p-4">
