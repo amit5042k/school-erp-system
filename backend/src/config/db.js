@@ -56,6 +56,8 @@ function init() {
       qualification TEXT,
       phone TEXT,
       email TEXT,
+      department TEXT,
+      photo_url TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -305,8 +307,24 @@ function init() {
       from_date TEXT NOT NULL,
       to_date TEXT NOT NULL,
       reason TEXT,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      attachment TEXT,
+      session TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
+      approved_from TEXT,
+      approved_to TEXT,
+      remarks TEXT,
+      decided_by INTEGER,
+      decided_at TEXT,
       applied_on TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS leave_allowances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      teacher_id INTEGER NOT NULL,
+      session TEXT NOT NULL,
+      leave_type TEXT NOT NULL,
+      allowed REAL NOT NULL DEFAULT 0,
+      UNIQUE(teacher_id, session, leave_type),
       FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS payroll (
@@ -374,6 +392,18 @@ function init() {
     INSERT OR IGNORE INTO school_settings (id, school_name, address, phone, email, website, academic_year)
     VALUES (1, 'MGN Public School, Jalandhar', 'Urban Estate Phase-II, Jalandhar', '+91-181-0000000', 'office@mgnjalandhar.edu', 'https://edusecure.org/mgnjalandhar', '2025-26');
   `);
+
+  // Additive migrations for pre-existing databases (SQLite has no ADD COLUMN IF NOT EXISTS)
+  const tryAlter = (sql) => { try { db.exec(sql); } catch (_) { /* already exists */ } };
+  tryAlter(`ALTER TABLE staff_leaves ADD COLUMN attachment TEXT`);
+  tryAlter(`ALTER TABLE staff_leaves ADD COLUMN session TEXT`);
+  tryAlter(`ALTER TABLE staff_leaves ADD COLUMN approved_from TEXT`);
+  tryAlter(`ALTER TABLE staff_leaves ADD COLUMN approved_to TEXT`);
+  tryAlter(`ALTER TABLE staff_leaves ADD COLUMN remarks TEXT`);
+  tryAlter(`ALTER TABLE staff_leaves ADD COLUMN decided_by INTEGER`);
+  tryAlter(`ALTER TABLE staff_leaves ADD COLUMN decided_at TEXT`);
+  tryAlter(`ALTER TABLE teachers ADD COLUMN department TEXT`);
+  tryAlter(`ALTER TABLE teachers ADD COLUMN photo_url TEXT`);
 }
 
 init();

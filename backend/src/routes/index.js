@@ -14,6 +14,7 @@ const { authRequired, requireRole } = require('../middleware/auth');
 // Auth
 router.post('/auth/login', auth.login);
 router.get('/auth/me', authRequired, auth.me);
+router.post('/auth/change-password', authRequired, auth.changePassword);
 
 // Dashboard
 router.get('/dashboard', authRequired, dashboard.summary);
@@ -103,6 +104,10 @@ router.post('/inventory/movements', authRequired, requireRole('admin'), m.invent
 
 // HR
 crud('/leaves', m.leaves, ['admin','teacher']);
+router.get('/leaves/balance/:teacherId', authRequired, m.leaveBalance);
+router.post('/leaves/:id/decision', authRequired, requireRole('admin'), m.leaveDecision);
+router.get('/leave-allowances', authRequired, m.leaveAllowances.list);
+router.post('/leave-allowances', authRequired, requireRole('admin'), m.leaveAllowances.upsert);
 crud('/payroll', m.payroll, ['admin']);
 
 // Homework

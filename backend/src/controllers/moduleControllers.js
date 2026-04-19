@@ -188,13 +188,103 @@ exports.inventoryMove = (req, res) => {
 };
 
 /* ---------- HR ---------- */
+const LEAVE_TYPES = [
+  'Casual Leave',
+  'Casual Leave Jan_June',
+  'Casual Leave July_Dec',
+  'Compensatory Casual leave',
+  'Earned Leave',
+  'Leave without Pay',
+  'Medical Leave',
+  'On Duty',
+];
+exports.LEAVE_TYPES = LEAVE_TYPES;
+
 exports.leaves = makeCrud({
   table: 'staff_leaves',
-  fields: ['teacher_id','leave_type','from_date','to_date','reason','status'],
+  fields: ['teacher_id','leave_type','from_date','to_date','reason','attachment','session','status'],
   orderBy: 'applied_on DESC',
   joins: 'JOIN teachers t ON t.id = staff_leaves.teacher_id',
-  selectExtra: 'staff_leaves.*, t.full_name AS teacher_name, t.employee_no',
+  selectExtra: `staff_leaves.*, t.full_name AS teacher_name, t.employee_no,
+                t.department AS department, t.phone AS phone, t.photo_url AS photo_url`,
 });
+
+function daysInclusive(from, to) {
+  const a = new Date(from), b = new Date(to);
+  const ms = 24 * 60 * 60 * 1000;
+  return Math.max(1, Math.round((b - a) / ms) + 1);
+}
+
+exports.leaveBalance = (req, res) => {
+  const teacherId = Number(req.params.teacherId);
+  const session = req.query.session || db.prepare('SELECT academic_year FROM school_settings WHERE id = 1').get()?.academic_year || '';
+  const allowances = db.prepare(`
+    SELECT leave_type, allowed FROM leave_allowances WHERE teacher_id = ? AND session = ?
+  `).all(teacherId, session);
+  const approved = db.prepare(`
+    SELECT leave_type, from_date, to_date, approved_from, approved_to
+    FROM staff_leaves
+    WHERE teacher_id = ? AND session = ? AND status = 'approved'
+  `).all(teacherId, session);
+
+  const allowedMap = Object.fromEntries(allowances.map(a => [a.leave_type, a.allowed]));
+  const availedMap = {};
+  for (const r of approved) {
+    const from = r.approved_from || r.from_date;
+    const to = r.approved_to || r.to_date;
+    availedMap[r.leave_type] = (availedMap[r.leave_type] || 0) + daysInclusive(from, to);
+  }
+  const rows = LEAVE_TYPES.map(t => {
+    const allowed = allowedMap[t] || 0;
+    const availed = availedMap[t] || 0;
+    const extra = Math.max(0, availed - allowed);
+    const balance = Math.max(0, allowed - availed);
+    return { leave_type: t, allowed, availed, extra, balance };
+  });
+  res.json({ teacher_id: teacherId, session, rows });
+};
+
+exports.leaveDecision = (req, res) => {
+  const { action, approved_from, approved_to, remarks } = req.body;
+  if (!['approve','reject','cancel'].includes(action)) return res.status(400).json({ error: 'action must be approve|reject|cancel' });
+  const leave = db.prepare('SELECT * FROM staff_leaves WHERE id = ?').get(req.params.id);
+  if (!leave) return res.status(404).json({ error: 'Not found' });
+  const map = { approve: 'approved', reject: 'rejected', cancel: 'cancelled' };
+  db.prepare(`
+    UPDATE staff_leaves
+    SET status = ?, approved_from = ?, approved_to = ?, remarks = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    map[action],
+    action === 'approve' ? (approved_from || leave.from_date) : null,
+    action === 'approve' ? (approved_to || leave.to_date) : null,
+    remarks || null,
+    req.user?.id || null,
+    req.params.id
+  );
+  res.json({ ok: true });
+};
+
+exports.leaveAllowances = {
+  list(req, res) {
+    const teacherId = req.query.teacher_id;
+    const session = req.query.session;
+    const wheres = [], params = [];
+    if (teacherId) { wheres.push('teacher_id = ?'); params.push(teacherId); }
+    if (session) { wheres.push('session = ?'); params.push(session); }
+    const where = wheres.length ? 'WHERE ' + wheres.join(' AND ') : '';
+    res.json(db.prepare(`SELECT * FROM leave_allowances ${where} ORDER BY teacher_id, leave_type`).all(...params));
+  },
+  upsert(req, res) {
+    const { teacher_id, session, leave_type, allowed } = req.body;
+    if (!teacher_id || !session || !leave_type) return res.status(400).json({ error: 'teacher_id, session, leave_type required' });
+    db.prepare(`
+      INSERT INTO leave_allowances (teacher_id, session, leave_type, allowed) VALUES (?, ?, ?, ?)
+      ON CONFLICT(teacher_id, session, leave_type) DO UPDATE SET allowed = excluded.allowed
+    `).run(teacher_id, session, leave_type, allowed || 0);
+    res.json({ ok: true });
+  },
+};
 exports.payroll = makeCrud({
   table: 'payroll',
   fields: ['teacher_id','month','basic','allowances','deductions','net_pay','paid_on','status'],

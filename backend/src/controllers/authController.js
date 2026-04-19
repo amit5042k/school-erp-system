@@ -48,3 +48,17 @@ exports.me = (req, res) => {
     fullName: user.full_name, email: user.email, linkedId: user.linked_id,
   });
 };
+
+exports.changePassword = (req, res) => {
+  const { current_password, new_password } = req.body || {};
+  if (!current_password || !new_password || new_password.length < 6) {
+    return res.status(400).json({ error: 'current_password and new_password (min 6 chars) required' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (!bcrypt.compareSync(current_password, user.password_hash)) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(new_password, 10), req.user.id);
+  res.json({ ok: true });
+};

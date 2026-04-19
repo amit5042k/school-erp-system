@@ -6,40 +6,40 @@ function hash(p) { return bcrypt.hashSync(p, 10); }
 
 const tx = db.transaction(() => {
   // Wipe (dev only)
-  db.exec(`
-    DELETE FROM hostel_allotments;
-    DELETE FROM hostel_rooms;
-    DELETE FROM hostels;
-    DELETE FROM student_transport;
-    DELETE FROM routes;
-    DELETE FROM vehicles;
-    DELETE FROM book_issues;
-    DELETE FROM books;
-    DELETE FROM marks;
-    DELETE FROM exam_schedule;
-    DELETE FROM exams;
-    DELETE FROM inventory_movements;
-    DELETE FROM inventory_items;
-    DELETE FROM payroll;
-    DELETE FROM staff_leaves;
-    DELETE FROM homework;
-    DELETE FROM documents;
-    DELETE FROM communications;
-    DELETE FROM call_logs;
-    DELETE FROM postal;
-    DELETE FROM complaints;
-    DELETE FROM visitors;
-    DELETE FROM enquiries;
-    DELETE FROM attendance;
-    DELETE FROM fees;
-    DELETE FROM timetable;
-    DELETE FROM announcements;
-    DELETE FROM students;
-    DELETE FROM classes;
-    DELETE FROM teachers;
-    DELETE FROM users;
-    DELETE FROM sqlite_sequence;
-  `);
+  const del = (sql) => { try { db.exec(sql); } catch (_) {} };
+  del(`DELETE FROM hostel_allotments`);
+  del(`DELETE FROM hostel_rooms`);
+  del(`DELETE FROM hostels`);
+  del(`DELETE FROM student_transport`);
+  del(`DELETE FROM routes`);
+  del(`DELETE FROM vehicles`);
+  del(`DELETE FROM book_issues`);
+  del(`DELETE FROM books`);
+  del(`DELETE FROM marks`);
+  del(`DELETE FROM exam_schedule`);
+  del(`DELETE FROM exams`);
+  del(`DELETE FROM inventory_movements`);
+  del(`DELETE FROM inventory_items`);
+  del(`DELETE FROM payroll`);
+  del(`DELETE FROM leave_allowances`);
+  del(`DELETE FROM staff_leaves`);
+  del(`DELETE FROM homework`);
+  del(`DELETE FROM documents`);
+  del(`DELETE FROM communications`);
+  del(`DELETE FROM call_logs`);
+  del(`DELETE FROM postal`);
+  del(`DELETE FROM complaints`);
+  del(`DELETE FROM visitors`);
+  del(`DELETE FROM enquiries`);
+  del(`DELETE FROM attendance`);
+  del(`DELETE FROM fees`);
+  del(`DELETE FROM timetable`);
+  del(`DELETE FROM announcements`);
+  del(`DELETE FROM students`);
+  del(`DELETE FROM classes`);
+  del(`DELETE FROM teachers`);
+  del(`DELETE FROM users`);
+  del(`DELETE FROM sqlite_sequence`);
 
   // Users
   const insertUser = db.prepare(`
@@ -50,12 +50,14 @@ const tx = db.transaction(() => {
 
   // Teachers
   const insertTeacher = db.prepare(`
-    INSERT INTO teachers (employee_no, full_name, subject, qualification, phone, email)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO teachers (employee_no, full_name, subject, qualification, phone, email, department)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  const t1 = insertTeacher.run('EMP001', 'Ritu Sharma', 'Mathematics', 'M.Sc, B.Ed', '9810000001', 'ritu@mgnurban.edu').lastInsertRowid;
-  const t2 = insertTeacher.run('EMP002', 'Anil Verma', 'Science', 'M.Sc, B.Ed', '9810000002', 'anil@mgnurban.edu').lastInsertRowid;
-  const t3 = insertTeacher.run('EMP003', 'Pooja Nair', 'English', 'M.A, B.Ed', '9810000003', 'pooja@mgnurban.edu').lastInsertRowid;
+  const t1 = insertTeacher.run('EMP001', 'Ritu Sharma', 'Mathematics', 'M.Sc, B.Ed', '9810000001', 'ritu@mgnurban.edu', 'TEACHING').lastInsertRowid;
+  const t2 = insertTeacher.run('EMP002', 'Anil Verma', 'Science', 'M.Sc, B.Ed', '9810000002', 'anil@mgnurban.edu', 'TEACHING').lastInsertRowid;
+  const t3 = insertTeacher.run('EMP003', 'Pooja Nair', 'English', 'M.A, B.Ed', '9810000003', 'pooja@mgnurban.edu', 'TEACHING').lastInsertRowid;
+  const t4 = insertTeacher.run('EMP004', 'Suresh Bansal', 'Office Admin', 'B.Com', '9810000004', 'suresh@mgnjalandhar.edu', 'ADMIN').lastInsertRowid;
+  const t5 = insertTeacher.run('EMP005', 'Balwinder Singh', 'Driver', 'Class-VIII', '9810000005', null, 'TRANSPORT').lastInsertRowid;
 
   insertUser.run('ritu', hash('teacher123'), 'teacher', 'Ritu Sharma', 'ritu@mgnurban.edu', t1);
   insertUser.run('anil', hash('teacher123'), 'teacher', 'Anil Verma', 'anil@mgnurban.edu', t2);
@@ -189,9 +191,38 @@ const tx = db.transaction(() => {
   iI.run('CLN-001', 'Hand Sanitizer 500ml', 'Cleaning', 'bottle', 30, 10, 120);
   db.prepare(`INSERT INTO inventory_movements (item_id, movement_type, qty, reference) VALUES (?, ?, ?, ?)`).run(item1, 'purchase', 40, 'PO-2025-001');
 
-  // HR
-  db.prepare(`INSERT INTO staff_leaves (teacher_id, leave_type, from_date, to_date, reason, status) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(t1, 'Casual', '2026-04-22', '2026-04-23', 'Personal work', 'pending');
+  // HR — Leave allowances (per teacher per session)
+  const SESSION = '2026-2027';
+  const LEAVE_TYPES = [
+    'Casual Leave','Casual Leave Jan_June','Casual Leave July_Dec','Compensatory Casual leave',
+    'Earned Leave','Leave without Pay','Medical Leave','On Duty',
+  ];
+  const DEFAULT_ALLOWED = {
+    'Casual Leave': 12, 'Casual Leave Jan_June': 6, 'Casual Leave July_Dec': 6,
+    'Compensatory Casual leave': 0, 'Earned Leave': 10, 'Leave without Pay': 0,
+    'Medical Leave': 15, 'On Duty': 0,
+  };
+  const iLA = db.prepare(`INSERT INTO leave_allowances (teacher_id, session, leave_type, allowed) VALUES (?, ?, ?, ?)`);
+  for (const tid of [t1, t2, t3, t4, t5]) {
+    for (const lt of LEAVE_TYPES) iLA.run(tid, SESSION, lt, DEFAULT_ALLOWED[lt]);
+  }
+
+  // Sample pending & approved leaves
+  const iL = db.prepare(`
+    INSERT INTO staff_leaves (teacher_id, leave_type, from_date, to_date, reason, session, status, applied_on)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `);
+  iL.run(t1, 'Casual Leave',    '2026-04-22', '2026-04-23', 'Personal work',           SESSION, 'pending');
+  iL.run(t2, 'Medical Leave',   '2026-04-15', '2026-04-17', 'Viral fever — medical',   SESSION, 'pending');
+  iL.run(t3, 'Earned Leave',    '2026-05-02', '2026-05-05', 'Family function out of station', SESSION, 'pending');
+  iL.run(t4, 'On Duty',         '2026-04-20', '2026-04-20', 'CBSE workshop Chandigarh',SESSION, 'pending');
+  // one approved for balance demo
+  const approvedInsert = db.prepare(`
+    INSERT INTO staff_leaves (teacher_id, leave_type, from_date, to_date, reason, session, status, approved_from, approved_to, remarks)
+    VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)
+  `);
+  approvedInsert.run(t1, 'Casual Leave', '2026-04-05', '2026-04-06', 'Family event', SESSION, '2026-04-05', '2026-04-06', 'Approved by Principal');
+
   db.prepare(`INSERT INTO payroll (teacher_id, month, basic, allowances, deductions, net_pay, status) VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .run(t1, '2026-03', 45000, 8000, 3000, 50000, 'paid');
 
