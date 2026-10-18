@@ -552,8 +552,8 @@ exports.users = {
     if (linkProblem) return res.status(400).json({ error: linkProblem });
     try {
       const info = db.prepare(`
-        INSERT INTO users (username, password_hash, role, full_name, email, phone, linked_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (username, password_hash, role, full_name, email, phone, linked_id, must_change_password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
       `).run(username, bcrypt.hashSync(password, 10), role, full_name, email || null, phone || null, linked_id || null);
       res.status(201).json({ id: info.lastInsertRowid });
     } catch (e) { dbError(res, e); }
@@ -567,7 +567,7 @@ exports.users = {
   resetPassword(req, res) {
     const { password } = req.body;
     if (!password || String(password).length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
-    const info = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(password, 10), req.params.id);
+    const info = db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(bcrypt.hashSync(password, 10), req.params.id);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   },
@@ -673,7 +673,7 @@ exports.suggestions = {
 
 exports.incidents = makeCrud({
   table: 'incidents',
-  fields: ['incident_date','reported_by','location','description','action_taken','status'],
+  fields: ['incident_date','reported_by','location','description','action_taken','status','category','purpose','student_id'],
   orderBy: 'incident_date DESC',
   validate: (d) => (!isDate(d.incident_date) ? 'incident_date must be YYYY-MM-DD' : !d.description ? 'description is required' : null),
 });

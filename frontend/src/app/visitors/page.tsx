@@ -13,9 +13,18 @@ export default function VisitorsPage() {
   const [listing, setListing] = useState(false);
   const [form, setForm] = useState<any>({ visitor_name: '', phone: '', purpose: '', to_meet: '', id_proof: '', remarks: '' });
   const [err, setErr] = useState<string | null>(null);
+  const [purposes, setPurposes] = useState<{ id: number; name: string }[]>([]);
 
   async function load() { try { setRows(await api<Visitor[]>('/visitors')); } catch (e: any) { setErr(e.message); } }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    api<{ id: number; name: string }[]>('/masters/visit-purposes').then(setPurposes).catch(() => {});
+  }, []);
+
+  async function checkout(v: Visitor) {
+    try { await api(`/visitors/${v.id}/checkout`, { method: 'POST', body: '{}' }); load(); }
+    catch (e: any) { setErr(e.message); }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -40,14 +49,15 @@ export default function VisitorsPage() {
           { title: 'Visitors', actions: [
             { label: 'Add Visitor', onClick: () => setAdding(true) },
             { label: 'Manage Visitor', onClick: () => setListing(true) },
-            { label: 'Manage Purposes To Meet' },
+            { label: 'Manage Purposes To Meet', href: '/masters/visit-purposes' },
+            { label: 'Visitor Register', href: '/report/visitor-register' },
           ]},
           { title: 'Incidents', actions: [
-            { label: 'Add Incident Categories' },
-            { label: 'Add Incident Purpose' },
+            { label: 'Add Incident Categories', href: '/masters/incident-categories' },
+            { label: 'Add Incident Purpose', href: '/masters/incident-purposes' },
             { label: 'Add Student Incident', href: '/incidents' },
-            { label: 'Incident Dashboard', href: '/incidents' },
-            { label: 'View Incident Report', href: '/incidents' },
+            { label: 'Incident Dashboard', href: '/report/incident-summary' },
+            { label: 'View Incident Report', href: '/report/incident-register' },
           ]},
           { title: 'Prospectus', actions: [
             { label: 'Enter Prospectus', href: '/prospectus' },
@@ -66,7 +76,11 @@ export default function VisitorsPage() {
           </div>
           <div><label className="label">Visitor Name *</label><input className="input" required value={form.visitor_name} onChange={e => setForm({ ...form, visitor_name: e.target.value })} /></div>
           <div><label className="label">Phone</label><input className="input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-          <div><label className="label">Purpose</label><input className="input" value={form.purpose} onChange={e => setForm({ ...form, purpose: e.target.value })} /></div>
+          <div><label className="label">Purpose</label>
+            <select className="input" value={form.purpose} onChange={e => setForm({ ...form, purpose: e.target.value })}>
+              <option value="">-- Select --</option>
+              {purposes.map(p => <option key={p.id}>{p.name}</option>)}
+            </select></div>
           <div><label className="label">To Meet</label><input className="input" value={form.to_meet} onChange={e => setForm({ ...form, to_meet: e.target.value })} /></div>
           <div><label className="label">ID Proof</label><input className="input" value={form.id_proof} onChange={e => setForm({ ...form, id_proof: e.target.value })} /></div>
           <div className="md:col-span-3"><label className="label">Remarks</label><textarea className="input" value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} /></div>
@@ -87,7 +101,7 @@ export default function VisitorsPage() {
                 <tr key={v.id}>
                   <td>{v.visitor_name}</td><td>{v.phone}</td><td>{v.purpose}</td><td>{v.to_meet}</td>
                   <td>{fmtDateTime(v.in_time)}</td>
-                  <td>{fmtDateTime(v.out_time)}</td>
+                  <td>{v.out_time ? fmtDateTime(v.out_time) : <button className="text-xs text-brand-600 hover:underline" onClick={() => checkout(v)}>Check Out</button>}</td>
                 </tr>
               ))}
               {!rows.length && <tr><td colSpan={6} className="text-center py-4 text-gray-500">No visitors.</td></tr>}

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Shell from '@/components/Shell';
-import { api, clearSession } from '@/lib/api';
+import { api, clearSession, getUser } from '@/lib/api';
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -34,6 +34,11 @@ export default function ChangePasswordPage() {
     <Shell>
       <div className="text-xs text-gray-500 mb-1">Account › Change Password</div>
       <h2 className="text-xl font-bold text-brand-700 mb-4">Change Password</h2>
+      {getUser<any>()?.mustChangePassword && (
+        <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2 mb-4 max-w-md">
+          Please choose a new password before using the ERP. Your current password was set by the school or is a default.
+        </div>
+      )}
 
       <form onSubmit={submit} className="card p-4 max-w-md space-y-3 text-sm">
         <div>

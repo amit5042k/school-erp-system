@@ -15,3 +15,5 @@ backend/data/*.sqlite-wal
 backend/data/*.db
 *.tsbuildinfo
 package-lock.json
+backend/uploads/
+backend/data/backups/

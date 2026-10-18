@@ -21,6 +21,9 @@ exports.login = (req, res) => {
   const ok = bcrypt.compareSync(password, user ? user.password_hash : DUMMY_HASH) && !!user;
   if (!ok || (role && user.role !== role)) return res.status(401).json({ error: 'Invalid credentials' });
 
+  db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(new Date().toISOString(), user.id);
+  db.prepare("INSERT INTO audit_log (user_id, action, path, status, ip) VALUES (?, 'LOGIN', '/api/auth/login', 200, ?)").run(user.id, req.ip);
+
   const token = jwt.sign(
     { id: user.id, username: user.username, role: user.role, name: user.full_name },
     process.env.JWT_SECRET,
@@ -36,16 +39,18 @@ exports.login = (req, res) => {
       fullName: user.full_name,
       email: user.email,
       linkedId: user.linked_id,
+      mustChangePassword: !!user.must_change_password,
     },
   });
 };
 
 exports.me = (req, res) => {
-  const user = db.prepare('SELECT id, username, role, full_name, email, linked_id FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT id, username, role, full_name, email, linked_id, must_change_password FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json({
     id: user.id, username: user.username, role: user.role,
     fullName: user.full_name, email: user.email, linkedId: user.linked_id,
+    mustChangePassword: !!user.must_change_password,
   });
 };
 
@@ -59,6 +64,7 @@ exports.changePassword = (req, res) => {
   if (!bcrypt.compareSync(current_password, user.password_hash)) {
     return res.status(401).json({ error: 'Current password is incorrect' });
   }
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(new_password, 10), req.user.id);
+  if (current_password === new_password) return res.status(400).json({ error: 'New password must be different from the current one' });
+  db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(bcrypt.hashSync(new_password, 10), req.user.id);
   res.json({ ok: true });
 };

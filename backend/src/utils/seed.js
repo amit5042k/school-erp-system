@@ -1,45 +1,29 @@
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+db.pragma('foreign_keys = OFF');
 
 function hash(p) { return bcrypt.hashSync(p, 10); }
 
+const FORCE = process.argv.includes('--force');
+const DEV = process.argv.includes('--dev');
+
+// Create every module's tables first so they get wiped and stay consistent with the demo data.
+require('../modules').loadModules();
+
+const existing = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+if (existing && !FORCE) {
+  console.error(`Refusing to seed: this database already has ${existing} user(s) and seeding ERASES ALL DATA.`);
+  console.error('If you really want demo data here, run: npm run seed -- --force');
+  process.exit(1);
+}
+
 const tx = db.transaction(() => {
-  // Wipe (dev only)
-  const del = (sql) => { try { db.exec(sql); } catch (_) {} };
-  del(`DELETE FROM hostel_allotments`);
-  del(`DELETE FROM hostel_rooms`);
-  del(`DELETE FROM hostels`);
-  del(`DELETE FROM student_transport`);
-  del(`DELETE FROM routes`);
-  del(`DELETE FROM vehicles`);
-  del(`DELETE FROM book_issues`);
-  del(`DELETE FROM books`);
-  del(`DELETE FROM marks`);
-  del(`DELETE FROM exam_schedule`);
-  del(`DELETE FROM exams`);
-  del(`DELETE FROM inventory_movements`);
-  del(`DELETE FROM inventory_items`);
-  del(`DELETE FROM payroll`);
-  del(`DELETE FROM leave_allowances`);
-  del(`DELETE FROM staff_leaves`);
-  del(`DELETE FROM homework`);
-  del(`DELETE FROM documents`);
-  del(`DELETE FROM communications`);
-  del(`DELETE FROM call_logs`);
-  del(`DELETE FROM postal`);
-  del(`DELETE FROM complaints`);
-  del(`DELETE FROM visitors`);
-  del(`DELETE FROM enquiries`);
-  del(`DELETE FROM attendance`);
-  del(`DELETE FROM fees`);
-  del(`DELETE FROM timetable`);
-  del(`DELETE FROM announcements`);
-  del(`DELETE FROM students`);
-  del(`DELETE FROM classes`);
-  del(`DELETE FROM teachers`);
-  del(`DELETE FROM users`);
-  del(`DELETE FROM sqlite_sequence`);
+  // Wipe every table except settings (foreign keys are off for the duration of this script).
+  const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'
+    AND name NOT LIKE 'sqlite_%' AND name NOT IN ('school_settings')`).all().map(r => r.name);
+  for (const t of tables) db.exec(`DELETE FROM "${t}"`);
+  db.exec(`DELETE FROM sqlite_sequence`);
 
   // Users
   const insertUser = db.prepare(`
@@ -240,7 +224,10 @@ const tx = db.transaction(() => {
 });
 
 tx();
+// Demo passwords are public, so make every seeded account pick its own at first login (skip with --dev).
+if (!DEV) db.prepare('UPDATE users SET must_change_password = 1').run();
 console.log('Seeded successfully.');
+if (!DEV) console.log('Each account must set a new password the first time it signs in.');
 console.log('\nDemo credentials:');
 console.log('  Admin   → admin / admin123');
 console.log('  Teacher → ritu / teacher123');

@@ -1,19 +1,35 @@
 'use client';
 import ModulePage from '@/components/ModulePage';
+import { useEffect, useState } from 'react';
 import { api, getUser } from '@/lib/api';
+
+type Opt = { value: string | number; label: string };
 
 export default function IncidentsPage() {
   const isAdmin = getUser<any>()?.role === 'admin';
+  const [cats, setCats] = useState<Opt[]>([]);
+  const [purposes, setPurposes] = useState<Opt[]>([]);
+  const [students, setStudents] = useState<Opt[]>([]);
+  useEffect(() => {
+    const names = (r: { name: string }[]) => r.map(x => ({ value: x.name, label: x.name }));
+    api<any[]>('/masters/incident-categories').then(r => setCats(names(r))).catch(() => {});
+    api<any[]>('/masters/incident-purposes').then(r => setPurposes(names(r))).catch(() => {});
+    api<any[]>('/students').then(r => setStudents(r.map(s => ({ value: s.id, label: `${s.admission_no} — ${s.full_name}` })))).catch(() => {});
+  }, []);
   return (
     <ModulePage
       title="Incidents"
       endpoint="/incidents"
       canCreate={isAdmin}
+      canEdit={isAdmin}
       createLabel="+ Log Incident"
       emptyText="No incidents logged."
       searchKeys={['reported_by', 'location', 'description']}
       fields={[
         { name: 'incident_date', label: 'Date', type: 'date', required: true },
+        { name: 'category', label: 'Category', type: 'select', options: cats },
+        { name: 'purpose', label: 'Purpose', type: 'select', options: purposes },
+        { name: 'student_id', label: 'Student (if any)', type: 'select', options: students, hideInTable: true },
         { name: 'reported_by', label: 'Reported By' },
         { name: 'location', label: 'Location' },
         { name: 'description', label: 'Description', type: 'textarea', required: true },

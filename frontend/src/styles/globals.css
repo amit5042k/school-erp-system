@@ -68,3 +68,16 @@ body {
 .badge-red { @apply bg-red-100 text-red-700; }
 .badge-amber { @apply bg-amber-100 text-amber-700; }
 .badge-gray { @apply bg-gray-100 text-gray-700; }
+
+/* Printing: reports, report cards, ID cards, receipts print without the app chrome. */
+@media print {
+  #nav, header, footer, .no-print { display: none !important; }
+  #wrapper, main { margin: 0 !important; padding: 0 !important; }
+  body { background: #fff !important; }
+  .card { box-shadow: none !important; border: none !important; }
+  .print-break { page-break-after: always; break-after: page; }
+  .print-avoid-break { break-inside: avoid; }
+  a { color: inherit !important; text-decoration: none !important; }
+}
+.print-only { display: none; }
+@media print { .print-only { display: block; } }

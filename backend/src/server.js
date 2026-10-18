@@ -15,7 +15,8 @@ const routes = require('./routes');
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(helmet());
+// Uploaded files are loaded by the frontend from another origin (api. subdomain), so allow cross-origin reads.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000', credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
@@ -23,6 +24,19 @@ app.use(morgan('dev'));
 app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 30 }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'school-erp-backend', time: new Date().toISOString() }));
+// Activity log: every change (non-GET) request by a signed-in user.
+const auditDb = require('./config/db');
+const auditIns = auditDb.prepare('INSERT INTO audit_log (user_id, action, path, status, ip) VALUES (?, ?, ?, ?, ?)');
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'OPTIONS') {
+    res.on('finish', () => {
+      if (req.user) {
+        try { auditIns.run(req.user.id, req.method, req.originalUrl.split('?')[0].slice(0, 200), res.statusCode, req.ip); } catch (_) { /* never block a request on logging */ }
+      }
+    });
+  }
+  next();
+});
 app.use('/api', routes);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 

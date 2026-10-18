@@ -1,7 +1,10 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 
-const loadUser = db.prepare('SELECT id, username, role, full_name, linked_id, active FROM users WHERE id = ?');
+const loadUser = db.prepare('SELECT id, username, role, full_name, linked_id, active, must_change_password FROM users WHERE id = ?');
+
+// Reachable while a password change is pending, so the user can see who they are and change it.
+const PASSWORD_CHANGE_ALLOWED = ['/api/auth/me', '/api/auth/change-password', '/api/settings'];
 
 function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
@@ -17,6 +20,9 @@ function authRequired(req, res, next) {
   const user = loadUser.get(payload.id);
   if (!user || !user.active) return res.status(401).json({ error: 'Account is disabled' });
   req.user = { id: user.id, username: user.username, role: user.role, name: user.full_name, linked_id: user.linked_id };
+  if (user.must_change_password && !PASSWORD_CHANGE_ALLOWED.includes(req.originalUrl.split('?')[0])) {
+    return res.status(403).json({ error: 'You must change your password before continuing', code: 'PASSWORD_CHANGE_REQUIRED' });
+  }
   next();
 }
 

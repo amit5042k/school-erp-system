@@ -41,9 +41,54 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
     clearSession();
     if (!window.location.pathname.startsWith('/login')) window.location.replace('/login?expired=1');
   }
+  if (res.status === 403 && (data as any).code === 'PASSWORD_CHANGE_REQUIRED' && typeof window !== 'undefined'
+      && !window.location.pathname.startsWith('/change-password')) {
+    window.location.replace('/change-password?required=1');
+  }
   if (!res.ok) throw new Error((data as any).error || `Request failed (${res.status})`);
   return data as T;
 }
+
+export type UploadedFile = { id: number; url: string; name: string; size: number; mime: string };
+
+/** Upload one or more files (staff only). Returns stored file records whose `url` can be saved on any record. */
+export async function upload(files: File | File[] | FileList): Promise<UploadedFile[]> {
+  const list = files instanceof File ? [files] : Array.from(files as ArrayLike<File>);
+  const form = new FormData();
+  for (const f of list) form.append('file', f);
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/uploads`, { method: 'POST', body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as any).error || `Upload failed (${res.status})`);
+  return data as UploadedFile[];
+}
+
+/** Turn a stored link into something the browser can open. Uploaded files are stored as "/api/files/<name>". */
+export function fileUrl(u: string | null | undefined): string {
+  if (!u) return '';
+  if (u.startsWith('/api/')) return API_BASE.replace(/\/api\/?$/, '') + u;
+  return u;
+}
+
+/** Download rows as a CSV file Excel can open (UTF-8 with BOM so ₹ and Hindi text survive). */
+export function downloadCsv(filename: string, columns: { key: string; label: string }[], rows: any[]) {
+  const esc = (v: any) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [columns.map(c => esc(c.label)).join(','), ...rows.map(r => columns.map(c => esc(r[c.key])).join(','))].join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename.endsWith('.csv') ? filename : `${filename}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Indian-style money formatting: ₹1,23,456.00 */
+export const fmtMoney = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+};
 
 /** Today's date (YYYY-MM-DD) in the browser's timezone. `toISOString()` would give the UTC date. */
 export function localDate(d: Date = new Date()): string {

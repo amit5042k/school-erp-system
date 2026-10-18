@@ -55,6 +55,7 @@ const NAV: NavItem[] = [
   { label: 'Payroll Management',    href: '/payroll',               icon: '💰', roles: ADMIN },
   { label: 'Inventory',             href: '/inventory',             icon: '📦', roles: ADMIN },
   { label: 'Users & Roles',         href: '/users',                 icon: '🔐', roles: ADMIN },
+  { label: 'Backups',               href: '/backups',               icon: '💾', roles: ADMIN },
   { label: 'Reports',               href: '/reports',               icon: '📊' },
 ];
 
@@ -88,8 +89,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const u = getUser();
     if (!u || !getToken()) { clearSession(); router.replace('/login'); return; }
+    if (u.mustChangePassword && pathname !== '/change-password') { router.replace('/change-password?required=1'); return; }
     setUserState(u);
-  }, [router]);
+  }, [router, pathname]);
 
   // Auto-open the group whose child is current route
   useEffect(() => {

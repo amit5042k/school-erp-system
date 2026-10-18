@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api } from '@/lib/api';
+import { api, fileUrl, upload } from '@/lib/api';
 
 export type FieldDef = {
   name: string;
   label: string;
-  type?: 'text' | 'number' | 'date' | 'time' | 'email' | 'textarea' | 'select';
+  type?: 'text' | 'number' | 'date' | 'time' | 'email' | 'textarea' | 'select' | 'file' | 'month';
   required?: boolean;
   options?: { value: string | number; label: string }[];
   hideInForm?: boolean;
@@ -27,38 +27,71 @@ type Props = {
   initial?: Record<string, any>;
   searchKeys?: string[];
   children?: React.ReactNode;
+  /** Show an Edit link per row that loads it into the form and saves with PUT. */
+  canEdit?: boolean;
+  /** Hide the per-row Delete link even when the user can create. */
+  canDelete?: boolean;
+  /** Optional query string appended to the list request, e.g. '?class_id=3'. */
+  listQuery?: string;
 };
 
 export default function ModulePage({
   title, endpoint, fields, canCreate = true, createLabel = '+ Add New',
   emptyText = 'No records.', rowActions, initial = {}, searchKeys = [], children,
+  canEdit = false, canDelete = true, listQuery = '',
 }: Props) {
   const [rows, setRows] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<Record<string, any>>(initial);
   const [q, setQ] = useState('');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   async function load() {
-    try { setRows(await api<any[]>(endpoint)); setError(null); }
+    try { setRows(await api<any[]>(endpoint + listQuery)); setError(null); }
     catch (e: any) { setError(e.message); }
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [endpoint]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [endpoint, listQuery]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     try {
       const payload: any = { ...form };
       for (const f of fields) if (f.type === 'number' && payload[f.name] != null && payload[f.name] !== '') payload[f.name] = Number(payload[f.name]);
-      await api(endpoint, { method: 'POST', body: JSON.stringify(payload) });
-      setForm(initial); setAdding(false); load();
+      await api(editId ? `${endpoint}/${editId}` : endpoint, { method: editId ? 'PUT' : 'POST', body: JSON.stringify(payload) });
+      setForm(initial); setAdding(false); setEditId(null); load();
     } catch (e: any) { setError(e.message); }
+  }
+
+  function startEdit(row: any) {
+    const f: Record<string, any> = {};
+    for (const fd of fields) if (!fd.hideInForm) f[fd.name] = row[fd.name] ?? '';
+    setForm(f); setEditId(row.id); setAdding(true);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function pickFile(name: string, files: FileList | null) {
+    if (!files || !files.length) return;
+    setUploading(true);
+    try { const [f] = await upload(files); setForm(x => ({ ...x, [name]: f.url })); }
+    catch (e: any) { setError(e.message); }
+    finally { setUploading(false); }
   }
 
   async function remove(id: number) {
     if (!confirm('Delete this record?')) return;
     try { await api(`${endpoint}/${id}`, { method: 'DELETE' }); load(); }
     catch (e: any) { setError(e.message); }
+  }
+
+  function display(f: FieldDef, row: any) {
+    const v = row[f.name];
+    if (f.formatter) return f.formatter(v, row);
+    if (v == null || v === '') return '—';
+    if (f.type === 'file') return <a href={fileUrl(v)} target="_blank" rel="noreferrer" className="text-brand-600 underline">View</a>;
+    if (f.type === 'select') return f.options?.find(o => String(o.value) === String(v))?.label ?? v;
+    return v;
   }
 
   const visibleFields = fields.filter(f => !f.hideInTable);
@@ -69,7 +102,7 @@ export default function ModulePage({
     <Shell>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-brand-700">{title}</h2>
-        {canCreate && <button className="btn btn-primary text-sm" onClick={() => setAdding(v => !v)}>{adding ? 'Cancel' : createLabel}</button>}
+        {canCreate && <button className="btn btn-primary text-sm" onClick={() => { if (adding) { setForm(initial); setEditId(null); } setAdding(v => !v); }}>{adding ? 'Cancel' : createLabel}</button>}
       </div>
 
       {children}
@@ -88,6 +121,11 @@ export default function ModulePage({
                   <option value="">-- Select --</option>
                   {(f.options || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
+              ) : f.type === 'file' ? (
+                <div>
+                  <input className="input" type="file" disabled={uploading} onChange={e => pickFile(f.name, e.target.files)} />
+                  {form[f.name] && <a className="text-xs text-brand-600 underline" href={fileUrl(form[f.name])} target="_blank" rel="noreferrer">Current file</a>}
+                </div>
               ) : (
                 <input className="input" type={f.type || 'text'} required={f.required}
                   placeholder={f.placeholder} value={form[f.name] ?? ''}
@@ -95,7 +133,7 @@ export default function ModulePage({
               )}
             </div>
           ))}
-          <div className="md:col-span-3"><button className="btn btn-primary">Save</button></div>
+          <div className="md:col-span-3"><button className="btn btn-primary" disabled={uploading}>{editId ? 'Save Changes' : 'Save'}</button></div>
         </form>
       )}
 
@@ -108,16 +146,19 @@ export default function ModulePage({
         <table className="table min-w-max">
           <thead><tr>
             {visibleFields.map(f => <th key={f.name}>{f.label}</th>)}
-            {rowActions && <th>Actions</th>}
-            {canCreate && !rowActions && <th></th>}
+            {(rowActions || canEdit || (canCreate && canDelete)) && <th>Actions</th>}
           </tr></thead>
           <tbody>
             {filtered.map(row => (
               <tr key={row.id}>
-                {visibleFields.map(f => <td key={f.name}>{f.formatter ? f.formatter(row[f.name], row) : (row[f.name] ?? '—')}</td>)}
-                {rowActions && <td>{rowActions(row, load)}</td>}
-                {canCreate && !rowActions && (
-                  <td><button onClick={() => remove(row.id)} className="text-xs text-red-600 hover:underline">Delete</button></td>
+                {visibleFields.map(f => <td key={f.name}>{display(f, row)}</td>)}
+                {(rowActions || canEdit || (canCreate && canDelete)) && (
+                  <td className="whitespace-nowrap">
+                    {canEdit && <button onClick={() => startEdit(row)} className="text-xs text-brand-600 hover:underline mr-2">Edit</button>}
+                    {rowActions ? rowActions(row, load) : canCreate && canDelete && (
+                      <button onClick={() => remove(row.id)} className="text-xs text-red-600 hover:underline">Delete</button>
+                    )}
+                  </td>
                 )}
               </tr>
             ))}

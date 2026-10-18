@@ -507,6 +507,34 @@ function init() {
   tryAlter(`ALTER TABLE teachers ADD COLUMN department TEXT`);
   tryAlter(`ALTER TABLE teachers ADD COLUMN photo_url TEXT`);
   tryAlter(`ALTER TABLE classes ADD COLUMN description TEXT`);
+  tryAlter(`ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0`);
+  tryAlter(`ALTER TABLE users ADD COLUMN last_login_at TEXT`);
+
+  // Shared profile fields used across modules (reports, payroll, ID cards, promotion).
+  for (const col of [
+    "status TEXT NOT NULL DEFAULT 'active'",   // active | inactive | left | tc_issued | passed_out
+    'admission_date TEXT', 'session TEXT', 'photo_url TEXT', 'email TEXT', 'blood_group TEXT',
+    'category TEXT', 'religion TEXT', 'aadhaar_no TEXT', 'house TEXT', 'status_reason TEXT', 'status_date TEXT',
+  ]) tryAlter(`ALTER TABLE students ADD COLUMN ${col}`);
+  for (const col of [
+    "status TEXT NOT NULL DEFAULT 'active'",   // active | inactive | left
+    'joining_date TEXT', 'designation TEXT', 'staff_category TEXT', 'gender TEXT', 'dob TEXT', 'address TEXT',
+    'bank_name TEXT', 'bank_account TEXT', 'ifsc TEXT', 'pan_no TEXT', 'uan_no TEXT', 'esi_no TEXT',
+    'blood_group TEXT', 'aadhaar_no TEXT',
+  ]) tryAlter(`ALTER TABLE teachers ADD COLUMN ${col}`);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      action TEXT NOT NULL,
+      path TEXT NOT NULL,
+      status INTEGER,
+      ip TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS ix_audit_user ON audit_log(user_id, created_at);
+  `);
 
   // Older DBs had UNIQUE(student_id, room_id), which blocked re-allotting a student to a room they had vacated.
   const allotSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'hostel_allotments'").get()?.sql || '';

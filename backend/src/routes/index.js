@@ -10,6 +10,7 @@ const classes = require('../controllers/classesController');
 const dashboard = require('../controllers/dashboardController');
 const m = require('../controllers/moduleControllers');
 const { authRequired, requireRole, ownStudentOnly } = require('../middleware/auth');
+const { registerModules } = require('../modules');
 
 const ALL = ['admin', 'teacher', 'student', 'parent'];
 const STAFF = ['admin', 'teacher'];
@@ -151,5 +152,8 @@ router.put('/settings', authRequired, requireRole(...ADMIN), m.settings.update);
 
 // Reports
 router.get('/reports/summary', authRequired, requireRole(...STAFF), m.reports);
+
+// Feature modules in src/modules (reports, masters, uploads, and each module area)
+registerModules(router);
 
 module.exports = router;
