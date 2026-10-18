@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import ExploreOptions from '@/components/ExploreOptions';
-import { api } from '@/lib/api';
+import { api, fmtDateTime } from '@/lib/api';
 
 type Visitor = { id: number; visitor_name: string; phone: string; purpose: string; to_meet: string; id_proof: string; in_time: string; out_time?: string; remarks?: string };
 
@@ -86,8 +86,8 @@ export default function VisitorsPage() {
               {rows.map(v => (
                 <tr key={v.id}>
                   <td>{v.visitor_name}</td><td>{v.phone}</td><td>{v.purpose}</td><td>{v.to_meet}</td>
-                  <td>{v.in_time ? new Date(v.in_time).toLocaleString() : '—'}</td>
-                  <td>{v.out_time ? new Date(v.out_time).toLocaleString() : '—'}</td>
+                  <td>{fmtDateTime(v.in_time)}</td>
+                  <td>{fmtDateTime(v.out_time)}</td>
                 </tr>
               ))}
               {!rows.length && <tr><td colSpan={6} className="text-center py-4 text-gray-500">No visitors.</td></tr>}

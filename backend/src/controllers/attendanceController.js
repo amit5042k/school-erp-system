@@ -1,8 +1,14 @@
 const db = require('../config/db');
+const { today, dbError, isDate } = require('../utils/http');
+
+const STATUSES = ['present', 'absent', 'late', 'leave'];
 
 exports.markBulk = (req, res) => {
   const { date, records } = req.body;
-  if (!date || !Array.isArray(records)) return res.status(400).json({ error: 'date and records[] required' });
+  if (!isDate(date) || !Array.isArray(records)) return res.status(400).json({ error: 'date (YYYY-MM-DD) and records[] required' });
+  if (date > today()) return res.status(400).json({ error: 'Cannot mark attendance for a future date' });
+  const bad = records.find(r => !r || !r.student_id || !STATUSES.includes(r.status));
+  if (bad) return res.status(400).json({ error: `Each record needs student_id and a status of ${STATUSES.join('/')}` });
   const stmt = db.prepare(`
     INSERT INTO attendance (student_id, date, status, remarks)
     VALUES (?, ?, ?, ?)
@@ -11,7 +17,7 @@ exports.markBulk = (req, res) => {
   const tx = db.transaction((rows) => {
     for (const r of rows) stmt.run(r.student_id, date, r.status, r.remarks || null);
   });
-  tx(records);
+  try { tx(records); } catch (e) { return dbError(res, e); }
   res.json({ ok: true, count: records.length });
 };
 

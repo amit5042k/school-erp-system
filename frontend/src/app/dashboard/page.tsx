@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api, getUser } from '@/lib/api';
+import { api, getUser, fmtDate } from '@/lib/api';
 
 type AdminSummary = {
   role: 'admin' | 'teacher';
@@ -61,7 +61,7 @@ const TONE_STYLES: Record<string, string> = {
 };
 
 type StudentSummary = {
-  role: 'student';
+  role: 'student' | 'parent';
   student: any;
   attendance: { present: number; absent: number; total: number };
   fees: { term: string; amount: number; paid: number; status: string; due_date: string }[];
@@ -121,7 +121,7 @@ export default function DashboardPage() {
                 <li key={a.id} className="py-2 text-sm">
                   <span className="font-medium">{a.title}</span>
                   <span className="text-gray-500 ml-2 text-xs">
-                    {new Date(a.posted_at).toLocaleDateString()}
+                    {fmtDate(a.posted_at)}
                   </span>
                 </li>
               ))}
@@ -131,11 +131,11 @@ export default function DashboardPage() {
         </>
       )}
 
-      {data && data.role === 'student' && (
+      {data && (data.role === 'student' || data.role === 'parent') && (
         <>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="card p-4">
-              <h3 className="font-semibold text-brand-700 mb-3">My Profile</h3>
+              <h3 className="font-semibold text-brand-700 mb-3">{data.role === 'parent' ? 'My Child' : 'My Profile'}</h3>
               {data.student ? (
                 <dl className="text-sm grid grid-cols-2 gap-y-1">
                   <dt className="text-gray-500">Name</dt><dd>{data.student.full_name}</dd>
@@ -186,7 +186,7 @@ export default function DashboardPage() {
                 <li key={a.id} className="py-2 text-sm">
                   <span className="font-medium">{a.title}</span>
                   <span className="text-gray-500 ml-2 text-xs">
-                    {new Date(a.posted_at).toLocaleDateString()}
+                    {fmtDate(a.posted_at)}
                   </span>
                 </li>
               ))}

@@ -13,7 +13,7 @@ export default function FeesPage() {
   const [showTable, setShowTable] = useState(false);
   const user = getUser<any>();
   const isAdmin = user?.role === 'admin';
-  const isStudent = user?.role === 'student';
+  const isStudent = user?.role === 'student' || user?.role === 'parent';
 
   async function load() {
     try {

@@ -272,7 +272,6 @@ function init() {
       room_id INTEGER NOT NULL,
       allotted_on TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       vacated_on TEXT,
-      UNIQUE(student_id, room_id),
       FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE,
       FOREIGN KEY(room_id) REFERENCES hostel_rooms(id)
     );
@@ -391,6 +390,109 @@ function init() {
     );
     INSERT OR IGNORE INTO school_settings (id, school_name, address, phone, email, website, academic_year)
     VALUES (1, 'School ERP', 'Head Office Address', '+91-0000000000', 'office@school.example', 'https://school.example', '2025-26');
+
+    CREATE TABLE IF NOT EXISTS fee_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fee_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      receipt_no TEXT NOT NULL,
+      paid_on TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      received_by INTEGER,
+      FOREIGN KEY(fee_id) REFERENCES fees(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_date TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'Event',
+      name TEXT NOT NULL,
+      description TEXT,
+      attachment TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS surveys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      class_id INTEGER,
+      section TEXT,
+      question TEXT NOT NULL,
+      option1 TEXT NOT NULL,
+      option2 TEXT NOT NULL,
+      option3 TEXT,
+      option4 TEXT,
+      expire_date TEXT NOT NULL,
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(class_id) REFERENCES classes(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS activities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      class_id INTEGER,
+      section TEXT,
+      name TEXT NOT NULL,
+      activity_date TEXT NOT NULL,
+      description TEXT,
+      file_names TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(class_id) REFERENCES classes(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS prospectus (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      prospectus_no TEXT UNIQUE NOT NULL,
+      session TEXT,
+      date TEXT,
+      class_id INTEGER,
+      first_name TEXT NOT NULL,
+      last_name TEXT,
+      father_name TEXT,
+      mother_name TEXT,
+      phone TEXT,
+      alt_number TEXT,
+      email TEXT,
+      gender TEXT CHECK (gender IN ('M','F','O')),
+      dob TEXT,
+      last_school TEXT,
+      prev_marks TEXT,
+      prospectus_char TEXT,
+      prospectus_amount REAL DEFAULT 0,
+      payment_mode TEXT,
+      bank_charges REAL DEFAULT 0,
+      total_amount REAL DEFAULT 0,
+      address TEXT,
+      remarks TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(class_id) REFERENCES classes(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS awards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recipient TEXT NOT NULL,
+      recipient_type TEXT CHECK (recipient_type IN ('staff','student')),
+      title TEXT NOT NULL,
+      award_date TEXT,
+      session TEXT,
+      description TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS suggestions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','reviewed','closed')),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS incidents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      incident_date TEXT NOT NULL,
+      reported_by TEXT,
+      location TEXT,
+      description TEXT NOT NULL,
+      action_taken TEXT,
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved')),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Additive migrations for pre-existing databases (SQLite has no ADD COLUMN IF NOT EXISTS)
@@ -404,6 +506,45 @@ function init() {
   tryAlter(`ALTER TABLE staff_leaves ADD COLUMN decided_at TEXT`);
   tryAlter(`ALTER TABLE teachers ADD COLUMN department TEXT`);
   tryAlter(`ALTER TABLE teachers ADD COLUMN photo_url TEXT`);
+  tryAlter(`ALTER TABLE classes ADD COLUMN description TEXT`);
+
+  // Older DBs had UNIQUE(student_id, room_id), which blocked re-allotting a student to a room they had vacated.
+  const allotSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'hostel_allotments'").get()?.sql || '';
+  if (/UNIQUE\s*\(\s*student_id\s*,\s*room_id\s*\)/i.test(allotSql)) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE hostel_allotments_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          student_id INTEGER NOT NULL,
+          room_id INTEGER NOT NULL,
+          allotted_on TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          vacated_on TEXT,
+          FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE,
+          FOREIGN KEY(room_id) REFERENCES hostel_rooms(id)
+        );
+        INSERT INTO hostel_allotments_new (id, student_id, room_id, allotted_on, vacated_on)
+          SELECT id, student_id, room_id, allotted_on, vacated_on FROM hostel_allotments;
+        DROP TABLE hostel_allotments;
+        ALTER TABLE hostel_allotments_new RENAME TO hostel_allotments;
+      `);
+    })();
+  }
+  // Keep only the newest active allotment per student before enforcing one-active-room.
+  db.exec(`
+    UPDATE hostel_allotments SET vacated_on = CURRENT_TIMESTAMP
+    WHERE vacated_on IS NULL AND id NOT IN (
+      SELECT MAX(id) FROM hostel_allotments WHERE vacated_on IS NULL GROUP BY student_id
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_hostel_active_student ON hostel_allotments(student_id) WHERE vacated_on IS NULL;
+  `);
+
+  // Timetable slots must be unique so saving a slot updates it instead of duplicating it.
+  db.exec(`
+    DELETE FROM timetable WHERE id NOT IN (
+      SELECT MAX(id) FROM timetable GROUP BY class_id, day, period
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_timetable_slot ON timetable(class_id, day, period);
+  `);
 }
 
 init();

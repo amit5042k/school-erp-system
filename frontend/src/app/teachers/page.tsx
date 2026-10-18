@@ -5,7 +5,7 @@ import Shell from '@/components/Shell';
 import ExploreOptions from '@/components/ExploreOptions';
 import { api, getUser } from '@/lib/api';
 
-type Teacher = { id: number; employee_no: string; full_name: string; subject: string; qualification: string; phone: string; email: string };
+type Teacher = { id: number; employee_no: string; full_name: string; subject: string; qualification: string; phone: string; email: string; department?: string | null };
 
 export default function TeachersPage() {
   const [rows, setRows] = useState<Teacher[]>([]);
@@ -14,7 +14,7 @@ export default function TeachersPage() {
   const [listing, setListing] = useState(false);
   const user = getUser<any>();
   const isAdmin = user?.role === 'admin';
-  const [form, setForm] = useState({ employee_no: '', full_name: '', subject: '', qualification: '', phone: '', email: '' });
+  const [form, setForm] = useState({ employee_no: '', full_name: '', subject: '', qualification: '', phone: '', email: '', department: '' });
 
   async function load() { try { setRows(await api<Teacher[]>('/teachers')); } catch (e: any) { setError(e.message); } }
   useEffect(() => { load(); }, []);
@@ -24,7 +24,7 @@ export default function TeachersPage() {
     try {
       await api('/teachers', { method: 'POST', body: JSON.stringify(form) });
       setAdding(false);
-      setForm({ employee_no: '', full_name: '', subject: '', qualification: '', phone: '', email: '' });
+      setForm({ employee_no: '', full_name: '', subject: '', qualification: '', phone: '', email: '', department: '' });
       load();
     } catch (e: any) { setError(e.message); }
   }
@@ -99,6 +99,7 @@ export default function TeachersPage() {
           <div><label className="label">Qualification</label><input className="input" value={form.qualification} onChange={e => setForm({ ...form, qualification: e.target.value })} /></div>
           <div><label className="label">Phone</label><input className="input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
           <div><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+          <div><label className="label">Department</label><input className="input" value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} /></div>
           <div className="md:col-span-3"><button className="btn btn-primary">Save Employee</button></div>
         </form>
       )}
@@ -111,15 +112,15 @@ export default function TeachersPage() {
           </div>
           {error && <div className="text-red-700 text-sm mb-2">{error}</div>}
           <table className="table">
-            <thead><tr><th>Emp No</th><th>Name</th><th>Subject</th><th>Qualification</th><th>Phone</th><th>Email</th></tr></thead>
+            <thead><tr><th>Emp No</th><th>Name</th><th>Department</th><th>Subject</th><th>Qualification</th><th>Phone</th><th>Email</th></tr></thead>
             <tbody>
               {rows.map(t => (
                 <tr key={t.id}>
-                  <td>{t.employee_no}</td><td>{t.full_name}</td><td>{t.subject}</td>
+                  <td>{t.employee_no}</td><td>{t.full_name}</td><td>{t.department || '—'}</td><td>{t.subject}</td>
                   <td>{t.qualification}</td><td>{t.phone}</td><td>{t.email}</td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={6} className="text-center text-gray-500 py-4">No employees found.</td></tr>}
+              {!rows.length && <tr><td colSpan={7} className="text-center text-gray-500 py-4">No employees found.</td></tr>}
             </tbody>
           </table>
         </div>

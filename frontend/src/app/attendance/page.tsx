@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import ExploreOptions from '@/components/ExploreOptions';
-import { api, getUser } from '@/lib/api';
+import { api, getUser, localDate } from '@/lib/api';
 
 type Row = { student_id: number; full_name: string; roll_no: number; class_id: number; status?: string | null };
 type ClassRow = { id: number; name: string; section: string };
 
 export default function AttendancePage() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDate();
   const [date, setDate] = useState(today);
   const [classId, setClassId] = useState<string>('');
   const [classes, setClasses] = useState<ClassRow[]>([]);

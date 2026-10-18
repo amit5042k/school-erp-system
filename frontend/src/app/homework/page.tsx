@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import ExploreOptions from '@/components/ExploreOptions';
-import { api } from '@/lib/api';
+import { api, fmtDate } from '@/lib/api';
 
 export default function HomeworkPage() {
   const [rows, setRows] = useState<any[]>([]);
@@ -104,7 +104,7 @@ export default function HomeworkPage() {
         <table className="table"><thead><tr><th>Class</th><th>Subject</th><th>Title</th><th>Due</th><th>Teacher</th><th>Posted</th></tr></thead>
           <tbody>{rows.map(h => <tr key={h.id}><td>{h.class_name} {h.class_section}</td><td>{h.subject}</td>
             <td><div className="font-medium">{h.title}</div><div className="text-xs text-gray-500">{h.description}</div></td>
-            <td>{h.due_date || '—'}</td><td>{h.teacher_name}</td><td>{new Date(h.assign_date).toLocaleDateString()}</td></tr>)}
+            <td>{h.due_date || '—'}</td><td>{h.teacher_name}</td><td>{fmtDate(h.assign_date)}</td></tr>)}
             {!rows.length && <tr><td colSpan={6} className="text-center py-3 text-gray-500">No homework assigned.</td></tr>}
           </tbody></table>
       </div>

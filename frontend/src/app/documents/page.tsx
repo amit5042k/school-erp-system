@@ -1,4 +1,5 @@
 'use client';
+import { fmtDate } from '@/lib/api';
 import ModulePage from '@/components/ModulePage';
 
 export default function DocumentsPage() {
@@ -16,7 +17,7 @@ export default function DocumentsPage() {
         { name: 'audience', label: 'Audience', type: 'select', options: [
           { value: 'all', label: 'All' }, { value: 'student', label: 'Students' },
           { value: 'teacher', label: 'Teachers' }, { value: 'parent', label: 'Parents' }] },
-        { name: 'uploaded_at', label: 'Uploaded', formatter: v => v ? new Date(v).toLocaleDateString() : '—', hideInForm: true },
+        { name: 'uploaded_at', label: 'Uploaded', formatter: v => fmtDate(v), hideInForm: true },
       ]}
     />
   );

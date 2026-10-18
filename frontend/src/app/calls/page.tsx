@@ -1,4 +1,5 @@
 'use client';
+import { fmtDateTime } from '@/lib/api';
 import ModulePage from '@/components/ModulePage';
 
 export default function CallsPage() {
@@ -14,7 +15,7 @@ export default function CallsPage() {
           { value: 'incoming', label: 'Incoming' }, { value: 'outgoing', label: 'Outgoing' }] },
         { name: 'purpose', label: 'Purpose' },
         { name: 'note', label: 'Note', type: 'textarea' },
-        { name: 'call_date', label: 'Date', formatter: v => v ? new Date(v).toLocaleString() : '—', hideInForm: true },
+        { name: 'call_date', label: 'Date', formatter: v => fmtDateTime(v), hideInForm: true },
       ]}
     />
   );

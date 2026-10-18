@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import ExploreOptions from '@/components/ExploreOptions';
-import { api } from '@/lib/api';
+import { api, fmtDate } from '@/lib/api';
 
 type Book = { id: number; book_no: string; title: string; author: string; qty_total: number; qty_available: number };
 type Issue = { id: number; book_title: string; book_no: string; student_name?: string; teacher_name?: string; issue_date: string; due_date: string; return_date?: string; status: string; fine: number };
@@ -155,9 +155,9 @@ export default function LibraryPage() {
                       <tr key={i.id}>
                         <td>{i.book_no} — {i.book_title}</td>
                         <td>{i.student_name || i.teacher_name}</td>
-                        <td>{new Date(i.issue_date).toLocaleDateString()}</td>
+                        <td>{fmtDate(i.issue_date)}</td>
                         <td>{i.due_date || '—'}</td>
-                        <td>{i.return_date ? new Date(i.return_date).toLocaleDateString() : '—'}</td>
+                        <td>{fmtDate(i.return_date)}</td>
                         <td><span className={`badge ${i.status === 'returned' ? 'badge-green' : i.status === 'lost' ? 'badge-red' : 'badge-amber'}`}>{i.status}</span></td>
                         <td>{i.status === 'issued' && <button className="btn btn-primary text-xs py-1" onClick={() => returnBook(i.id)}>Mark Returned</button>}</td>
                       </tr>

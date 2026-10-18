@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api, getUser } from '@/lib/api';
+import { api, getUser, fmtDateTime } from '@/lib/api';
 
 type Announcement = { id: number; title: string; body: string; audience: string; posted_by_name: string; posted_at: string };
 
@@ -61,7 +61,7 @@ export default function AnnouncementsPage() {
             </div>
             <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{a.body}</p>
             <div className="text-xs text-gray-500 mt-2">
-              Posted by {a.posted_by_name || 'Admin'} on {new Date(a.posted_at).toLocaleString()}
+              Posted by {a.posted_by_name || 'Admin'} on {fmtDateTime(a.posted_at)}
             </div>
           </div>
         ))}

@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const db = require('../config/db');
 
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
+
 const loginSchema = z.object({
   username: z.string().min(2),
   password: z.string().min(4),
@@ -15,11 +17,9 @@ exports.login = (req, res) => {
 
   const { username, password, role } = parsed.data;
   const user = db.prepare('SELECT * FROM users WHERE username = ? AND active = 1').get(username);
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-  if (role && user.role !== role) return res.status(401).json({ error: 'Role mismatch' });
-
-  const ok = bcrypt.compareSync(password, user.password_hash);
-  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+  // Compare against a dummy hash when the user doesn't exist so response time doesn't reveal valid usernames.
+  const ok = bcrypt.compareSync(password, user ? user.password_hash : DUMMY_HASH) && !!user;
+  if (!ok || (role && user.role !== role)) return res.status(401).json({ error: 'Invalid credentials' });
 
   const token = jwt.sign(
     { id: user.id, username: user.username, role: user.role, name: user.full_name },

@@ -9,7 +9,11 @@ const announcements = require('../controllers/announcementsController');
 const classes = require('../controllers/classesController');
 const dashboard = require('../controllers/dashboardController');
 const m = require('../controllers/moduleControllers');
-const { authRequired, requireRole } = require('../middleware/auth');
+const { authRequired, requireRole, ownStudentOnly } = require('../middleware/auth');
+
+const ALL = ['admin', 'teacher', 'student', 'parent'];
+const STAFF = ['admin', 'teacher'];
+const ADMIN = ['admin'];
 
 // Auth
 router.post('/auth/login', auth.login);
@@ -19,118 +23,133 @@ router.post('/auth/change-password', authRequired, auth.changePassword);
 // Dashboard
 router.get('/dashboard', authRequired, dashboard.summary);
 
-// Students
+// Students (students/parents are scoped to their own record inside the controller)
 router.get('/students', authRequired, students.list);
 router.get('/students/:id', authRequired, students.get);
-router.post('/students', authRequired, requireRole('admin'), students.create);
-router.put('/students/:id', authRequired, requireRole('admin'), students.update);
-router.delete('/students/:id', authRequired, requireRole('admin'), students.remove);
+router.post('/students', authRequired, requireRole(...ADMIN), students.create);
+router.put('/students/:id', authRequired, requireRole(...ADMIN), students.update);
+router.delete('/students/:id', authRequired, requireRole(...ADMIN), students.remove);
 
 // Teachers
 router.get('/teachers', authRequired, teachers.list);
 router.get('/teachers/:id', authRequired, teachers.get);
-router.post('/teachers', authRequired, requireRole('admin'), teachers.create);
-router.put('/teachers/:id', authRequired, requireRole('admin'), teachers.update);
-router.delete('/teachers/:id', authRequired, requireRole('admin'), teachers.remove);
+router.post('/teachers', authRequired, requireRole(...ADMIN), teachers.create);
+router.put('/teachers/:id', authRequired, requireRole(...ADMIN), teachers.update);
+router.delete('/teachers/:id', authRequired, requireRole(...ADMIN), teachers.remove);
 
 // Classes
 router.get('/classes', authRequired, classes.list);
-router.post('/classes', authRequired, requireRole('admin'), classes.create);
+router.post('/classes', authRequired, requireRole(...ADMIN), classes.create);
+router.put('/classes/:id', authRequired, requireRole(...ADMIN), classes.update);
+router.delete('/classes/:id', authRequired, requireRole(...ADMIN), classes.remove);
 
 // Attendance
-router.get('/attendance', authRequired, attendance.byDate);
-router.post('/attendance/bulk', authRequired, requireRole('admin', 'teacher'), attendance.markBulk);
-router.get('/attendance/student/:studentId', authRequired, attendance.byStudent);
+router.get('/attendance', authRequired, requireRole(...STAFF), attendance.byDate);
+router.post('/attendance/bulk', authRequired, requireRole(...STAFF), attendance.markBulk);
+router.get('/attendance/student/:studentId', authRequired, ownStudentOnly(), attendance.byStudent);
 
 // Fees
-router.get('/fees', authRequired, requireRole('admin'), fees.list);
-router.get('/fees/student/:studentId', authRequired, fees.byStudent);
-router.post('/fees', authRequired, requireRole('admin'), fees.create);
-router.post('/fees/:id/pay', authRequired, requireRole('admin'), fees.pay);
+router.get('/fees', authRequired, requireRole(...ADMIN), fees.list);
+router.get('/fees/student/:studentId', authRequired, ownStudentOnly(), fees.byStudent);
+router.get('/fees/:id/payments', authRequired, fees.payments);
+router.post('/fees', authRequired, requireRole(...ADMIN), fees.create);
+router.post('/fees/:id/pay', authRequired, requireRole(...ADMIN), fees.pay);
 
 // Timetable
 router.get('/timetable/class/:classId', authRequired, timetable.byClass);
-router.post('/timetable', authRequired, requireRole('admin'), timetable.upsert);
+router.post('/timetable', authRequired, requireRole(...ADMIN), timetable.upsert);
+router.delete('/timetable/:id', authRequired, requireRole(...ADMIN), timetable.remove);
 
 // Announcements
 router.get('/announcements', authRequired, announcements.list);
-router.post('/announcements', authRequired, requireRole('admin', 'teacher'), announcements.create);
-router.delete('/announcements/:id', authRequired, requireRole('admin'), announcements.remove);
+router.post('/announcements', authRequired, requireRole(...STAFF), announcements.create);
+router.delete('/announcements/:id', authRequired, requireRole(...ADMIN), announcements.remove);
 
 /* ---------- Extended modules ---------- */
-function crud(path, ctrl, roles = ['admin']) {
-  router.get(path, authRequired, ctrl.list);
-  if (ctrl.get) router.get(`${path}/:id`, authRequired, ctrl.get);
-  router.post(path, authRequired, requireRole(...roles), ctrl.create);
-  if (ctrl.update) router.put(`${path}/:id`, authRequired, requireRole(...roles), ctrl.update);
-  if (ctrl.remove) router.delete(`${path}/:id`, authRequired, requireRole(...roles), ctrl.remove);
+// `read` = roles allowed to list/get, `write` = roles allowed to create/update/delete.
+function crud(path, ctrl, { read = STAFF, write = ADMIN } = {}) {
+  router.get(path, authRequired, requireRole(...read), ctrl.list);
+  if (ctrl.get) router.get(`${path}/:id`, authRequired, requireRole(...read), ctrl.get);
+  router.post(path, authRequired, requireRole(...write), ctrl.create);
+  if (ctrl.update) router.put(`${path}/:id`, authRequired, requireRole(...write), ctrl.update);
+  if (ctrl.remove) router.delete(`${path}/:id`, authRequired, requireRole(...write), ctrl.remove);
 }
 
-// Admissions
-crud('/enquiries', m.enquiries, ['admin']);
+// Admissions & Front Office (contain visitors' and parents' personal details)
+crud('/enquiries', m.enquiries, { read: ADMIN });
+crud('/visitors', m.visitors, { read: ADMIN });
+crud('/complaints', m.complaints, { read: ADMIN });
+crud('/postal', m.postal, { read: ADMIN });
+crud('/calls', m.calls, { read: ADMIN });
+crud('/incidents', m.incidents, { read: STAFF });
+router.get('/prospectus/next-no', authRequired, requireRole(...ADMIN), m.prospectus.nextNo);
+crud('/prospectus', m.prospectus, { read: ADMIN });
 
-// Front Office
-crud('/visitors', m.visitors, ['admin']);
-crud('/complaints', m.complaints, ['admin']);
-crud('/postal', m.postal, ['admin']);
-crud('/calls', m.calls, ['admin']);
-
-// Examinations
-crud('/exams', m.exams, ['admin']);
-crud('/exam-schedule', m.examSchedule, ['admin','teacher']);
+// Examinations (marks are scoped to the student's own record inside the controller)
+crud('/exams', m.exams, { read: ALL });
+crud('/exam-schedule', m.examSchedule, { read: ALL, write: STAFF });
 router.get('/marks', authRequired, m.listMarks);
-router.post('/marks', authRequired, requireRole('admin','teacher'), m.upsertMarks);
+router.post('/marks', authRequired, requireRole(...STAFF), m.upsertMarks);
 
 // Library
-crud('/books', m.books, ['admin']);
+crud('/books', m.books, { read: ALL });
 router.get('/book-issues', authRequired, m.listBookIssues);
-router.post('/book-issues', authRequired, requireRole('admin','teacher'), m.issueBook);
-router.post('/book-issues/:id/return', authRequired, requireRole('admin','teacher'), m.returnBook);
+router.post('/book-issues', authRequired, requireRole(...STAFF), m.issueBook);
+router.post('/book-issues/:id/return', authRequired, requireRole(...STAFF), m.returnBook);
 
 // Transport
-crud('/vehicles', m.vehicles, ['admin']);
-crud('/routes', m.routes, ['admin']);
-crud('/student-transport', m.studentTransport, ['admin']);
+crud('/vehicles', m.vehicles, { read: STAFF });
+crud('/routes', m.routes, { read: ALL });
+crud('/student-transport', m.studentTransport, { read: STAFF });
 
 // Hostel
-crud('/hostels', m.hostels, ['admin']);
-crud('/hostel-rooms', m.hostelRooms, ['admin']);
-crud('/hostel-allotments', m.hostelAllotments, ['admin']);
+crud('/hostels', m.hostels, { read: ALL });
+crud('/hostel-rooms', m.hostelRooms, { read: STAFF });
+crud('/hostel-allotments', m.hostelAllotments, { read: STAFF });
+router.post('/hostel-allotments/:id/vacate', authRequired, requireRole(...ADMIN), m.vacateAllotment);
 
 // Inventory
-crud('/inventory/items', m.inventoryItems, ['admin']);
-router.get('/inventory/movements', authRequired, m.inventoryMoveList);
-router.post('/inventory/movements', authRequired, requireRole('admin'), m.inventoryMove);
+crud('/inventory/items', m.inventoryItems, { read: ADMIN });
+router.get('/inventory/movements', authRequired, requireRole(...ADMIN), m.inventoryMoveList);
+router.post('/inventory/movements', authRequired, requireRole(...ADMIN), m.inventoryMove);
 
-// HR
-crud('/leaves', m.leaves, ['admin','teacher']);
-router.get('/leaves/balance/:teacherId', authRequired, m.leaveBalance);
-router.post('/leaves/:id/decision', authRequired, requireRole('admin'), m.leaveDecision);
-router.get('/leave-allowances', authRequired, m.leaveAllowances.list);
-router.post('/leave-allowances', authRequired, requireRole('admin'), m.leaveAllowances.upsert);
-crud('/payroll', m.payroll, ['admin']);
+// HR (teachers only see and change their own leaves inside the controller)
+crud('/leaves', m.leaves, { read: STAFF, write: STAFF });
+router.get('/leaves/balance/:teacherId', authRequired, requireRole(...STAFF), m.leaveBalance);
+router.post('/leaves/:id/decision', authRequired, requireRole(...ADMIN), m.leaveDecision);
+router.get('/leave-allowances', authRequired, requireRole(...STAFF), m.leaveAllowances.list);
+router.post('/leave-allowances', authRequired, requireRole(...ADMIN), m.leaveAllowances.upsert);
+crud('/payroll', m.payroll, { read: ADMIN });
+crud('/awards', m.awards, { read: ALL });
 
-// Homework
-crud('/homework', m.homework, ['admin','teacher']);
+// Academics
+crud('/homework', m.homework, { read: ALL, write: STAFF });
+crud('/events', m.events, { read: ALL });
+crud('/surveys', m.surveys, { read: ALL, write: STAFF });
+crud('/activities', m.activities, { read: ALL, write: STAFF });
+crud('/documents', m.documents, { read: ALL, write: STAFF });
+
+// Suggestion box: anyone can post, only admins read
+router.get('/suggestions', authRequired, requireRole(...ADMIN), m.suggestions.list);
+router.post('/suggestions', authRequired, m.suggestions.create);
+router.put('/suggestions/:id', authRequired, requireRole(...ADMIN), m.suggestions.update);
+router.delete('/suggestions/:id', authRequired, requireRole(...ADMIN), m.suggestions.remove);
 
 // Communications
-router.get('/communications', authRequired, m.communications.list);
-router.post('/communications', authRequired, requireRole('admin','teacher'), m.communications.create);
-
-// Documents
-crud('/documents', m.documents, ['admin','teacher']);
+router.get('/communications', authRequired, requireRole(...STAFF), m.communications.list);
+router.post('/communications', authRequired, requireRole(...STAFF), m.communications.create);
 
 // Users
-router.get('/users', authRequired, requireRole('admin'), m.users.list);
-router.post('/users', authRequired, requireRole('admin'), m.users.create);
-router.post('/users/:id/active', authRequired, requireRole('admin'), m.users.setActive);
-router.post('/users/:id/reset-password', authRequired, requireRole('admin'), m.users.resetPassword);
+router.get('/users', authRequired, requireRole(...ADMIN), m.users.list);
+router.post('/users', authRequired, requireRole(...ADMIN), m.users.create);
+router.post('/users/:id/active', authRequired, requireRole(...ADMIN), m.users.setActive);
+router.post('/users/:id/reset-password', authRequired, requireRole(...ADMIN), m.users.resetPassword);
 
 // Settings
 router.get('/settings', authRequired, m.settings.get);
-router.put('/settings', authRequired, requireRole('admin'), m.settings.update);
+router.put('/settings', authRequired, requireRole(...ADMIN), m.settings.update);
 
 // Reports
-router.get('/reports/summary', authRequired, m.reports);
+router.get('/reports/summary', authRequired, requireRole(...STAFF), m.reports);
 
 module.exports = router;

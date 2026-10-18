@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api } from '@/lib/api';
+import { api, fmtDate } from '@/lib/api';
 
 export default function HostelPage() {
   const [tab, setTab] = useState<'hostels'|'rooms'|'allotments'>('hostels');
@@ -50,6 +50,12 @@ export default function HostelPage() {
       }) });
       f.reset(); load();
     } catch (e: any) { setErr(e.message); }
+  }
+
+  async function vacate(id: number) {
+    if (!confirm('Mark this student as vacated today?')) return;
+    try { await api(`/hostel-allotments/${id}/vacate`, { method: 'POST', body: '{}' }); load(); }
+    catch (e: any) { setErr(e.message); }
   }
 
   return (
@@ -121,10 +127,11 @@ export default function HostelPage() {
             <div className="flex items-end"><button className="btn btn-primary">Allot</button></div>
           </form>
           <div className="card p-4 overflow-x-auto">
-            <table className="table"><thead><tr><th>Student</th><th>Hostel</th><th>Room</th><th>Allotted</th><th>Vacated</th></tr></thead>
+            <table className="table"><thead><tr><th>Student</th><th>Hostel</th><th>Room</th><th>Allotted</th><th>Vacated</th><th></th></tr></thead>
               <tbody>{allotments.map(a => <tr key={a.id}><td>{a.student_name}</td><td>{a.hostel_name}</td><td>{a.room_no}</td>
-                <td>{new Date(a.allotted_on).toLocaleDateString()}</td><td>{a.vacated_on || '—'}</td></tr>)}
-                {!allotments.length && <tr><td colSpan={5} className="text-center py-3 text-gray-500">No allotments.</td></tr>}
+                <td>{fmtDate(a.allotted_on)}</td><td>{a.vacated_on ? fmtDate(a.vacated_on) : <span className="badge badge-green">Current</span>}</td>
+                <td>{!a.vacated_on && <button className="text-xs text-red-600 hover:underline" onClick={() => vacate(a.id)}>Vacate</button>}</td></tr>)}
+                {!allotments.length && <tr><td colSpan={6} className="text-center py-3 text-gray-500">No allotments.</td></tr>}
               </tbody></table>
           </div>
         </>

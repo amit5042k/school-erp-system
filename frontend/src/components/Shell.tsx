@@ -3,56 +3,72 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { clearSession, getUser } from '@/lib/api';
+import { clearSession, getToken, getUser } from '@/lib/api';
 
 /**
  * Sidebar configuration.
  * Items with children render an expandable group; single items link directly.
  */
-type NavItem = { label: string; href?: string; icon?: string; children?: NavItem[] };
+type Role = 'admin' | 'teacher' | 'student' | 'parent';
+// `roles` limits who sees an item; items without it are staff-only (admin + teacher).
+type NavItem = { label: string; href?: string; icon?: string; roles?: Role[]; children?: NavItem[] };
+
+const ALL: Role[] = ['admin', 'teacher', 'student', 'parent'];
+const ADMIN: Role[] = ['admin'];
 
 const NAV: NavItem[] = [
-  { label: 'Dashboard',             href: '/dashboard',             icon: '▦' },
+  { label: 'Dashboard',             href: '/dashboard',             icon: '▦', roles: ALL },
   { label: 'Student',               href: '/students',              icon: '👤' },
-  { label: 'Academic Communication',href: '/homework',              icon: '📚' },
-  { label: 'Announcements',         href: '/announcements',         icon: '📣' },
+  { label: 'Academic Communication',href: '/homework',              icon: '📚', roles: ALL },
+  { label: 'Announcements',         href: '/announcements',         icon: '📣', roles: ALL },
   { label: 'Attendance',            href: '/attendance',            icon: '✓' },
-  { label: 'Finance',               href: '/fees',                  icon: '₹' },
-  { label: 'Documents',             href: '/documents',             icon: '📄' },
+  { label: 'Finance',               href: '/fees',                  icon: '₹', roles: ['admin', 'student', 'parent'] },
+  { label: 'Documents',             href: '/documents',             icon: '📄', roles: ALL },
   { label: 'Examination',           icon: '🏆', children: [
     { label: 'Exams',         href: '/exams'     },
     { label: 'Marks Entry',   href: '/marks'     },
-    { label: 'Time Table',    href: '/timetable' },
+    { label: 'Time Table',    href: '/timetable', roles: ALL },
   ]},
   { label: 'Transport',             href: '/transport',             icon: '🚌' },
-  { label: 'Settings',              href: '/settings',              icon: '⚙' },
+  { label: 'Settings',              href: '/settings',              icon: '⚙', roles: ADMIN },
   { label: 'Human Resource',        icon: '👥', children: [
     { label: 'Teachers',       href: '/teachers' },
     { label: 'Staff Leaves',   href: '/leaves'   },
-    { label: 'Awards',         href: '/awards'   },
+    { label: 'Awards',         href: '/awards', roles: ALL },
   ]},
   { label: 'Communication',         href: '/communications',        icon: '💬' },
   { label: 'Online Survey',         href: '/surveys',               icon: '🗳' },
-  { label: 'Suggestion Box',        href: '/suggestions',           icon: '💡' },
+  { label: 'Suggestion Box',        href: '/suggestions',           icon: '💡', roles: ALL },
   { label: 'Manage Activities',     href: '/activities',            icon: '🎭' },
   { label: 'Library Management',    href: '/library',               icon: '📖' },
-  { label: 'Front Office',          icon: '🏢', children: [
+  { label: 'Front Office',          icon: '🏢', roles: ADMIN, children: [
     { label: 'Visitors',    href: '/visitors'    },
     { label: 'Complaints',  href: '/complaints'  },
     { label: 'Postal',      href: '/postal'      },
     { label: 'Call Log',    href: '/calls'       },
     { label: 'Enquiries',   href: '/enquiries'   },
+    { label: 'Incidents',   href: '/incidents'   },
   ]},
-  { label: 'School calender',       href: '/calendar',              icon: '📅' },
-  { label: 'Student Prospectus',    href: '/prospectus',            icon: '🎓' },
+  { label: 'School calender',       href: '/calendar',              icon: '📅', roles: ALL },
+  { label: 'Student Prospectus',    href: '/prospectus',            icon: '🎓', roles: ADMIN },
   { label: 'Hostel',                href: '/hostel',                icon: '🏨' },
-  { label: 'Payroll Management',    href: '/payroll',               icon: '💰' },
-  { label: 'Inventory',             href: '/inventory',             icon: '📦' },
-  { label: 'Users & Roles',         href: '/users',                 icon: '🔐' },
+  { label: 'Payroll Management',    href: '/payroll',               icon: '💰', roles: ADMIN },
+  { label: 'Inventory',             href: '/inventory',             icon: '📦', roles: ADMIN },
+  { label: 'Users & Roles',         href: '/users',                 icon: '🔐', roles: ADMIN },
   { label: 'Reports',               href: '/reports',               icon: '📊' },
 ];
 
 const SESSIONS = ['2021-2022','2022-2023','2023-2024','2024-2025','2025-2026','2026-2027'];
+
+function navFor(role: Role): NavItem[] {
+  const can = (i: NavItem, inherited?: Role[]) => (i.roles || inherited || ['admin', 'teacher']).includes(role);
+  return NAV.flatMap(item => {
+    if (!item.children) return can(item) ? [item] : [];
+    if (item.roles && !can(item)) return [];
+    const children = item.children.filter(c => can(c, item.roles));
+    return children.length ? [{ ...item, children }] : [];
+  });
+}
 
 function isActive(href: string | undefined, pathname: string | null) {
   if (!href || !pathname) return false;
@@ -71,7 +87,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const u = getUser();
-    if (!u) { router.replace('/login'); return; }
+    if (!u || !getToken()) { clearSession(); router.replace('/login'); return; }
     setUserState(u);
   }, [router]);
 
@@ -109,7 +125,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="p-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
           <ul className="sidenav">
-            {NAV.map(item => {
+            {navFor(user.role).map(item => {
               if (item.children) {
                 const expanded = openGroup === item.label;
                 const anyActive = item.children.some(c => isActive(c.href, pathname));

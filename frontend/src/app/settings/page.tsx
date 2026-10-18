@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api } from '@/lib/api';
 
-type ClassRow = { id: number; name: string; section: string; description?: string | null };
+type ClassRow = { id: number; name: string; section: string; description?: string | null; class_teacher_id?: number | null; strength?: number };
 type Teacher = { id: number; full_name: string };
 
 export default function SettingsPage() {
@@ -13,7 +13,8 @@ export default function SettingsPage() {
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [draft, setDraft] = useState<{ name: string; section: string; description: string }>({ name: '', section: '', description: '' });
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [dirty, setDirty] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     api('/settings').then(setS).catch(() => {});
@@ -21,25 +22,60 @@ export default function SettingsPage() {
     api<Teacher[]>('/teachers').then(setTeachers).catch(() => {});
   }, []);
 
-  function flash(m: string) { setMsg(m); setTimeout(() => setMsg(null), 2500); }
+  function flash(text: string, ok = true) { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000); }
 
   async function saveSettings(e: React.FormEvent) {
     e.preventDefault();
     try {
       await api('/settings', { method: 'PUT', body: JSON.stringify(s) });
       flash('Settings saved.');
-    } catch (e: any) { flash(e.message); }
+    } catch (e: any) { flash(e.message, false); }
   }
 
   async function addClass(e: React.FormEvent) {
     e.preventDefault();
-    if (!draft.name) return;
+    if (!draft.name || !draft.section) return flash('Class Name and Section are required.', false);
     try {
       await api('/classes', { method: 'POST', body: JSON.stringify(draft) });
       setDraft({ name: '', section: '', description: '' });
       setClasses(await api<ClassRow[]>('/classes'));
       flash('Class added.');
-    } catch (e: any) { flash(e.message); }
+    } catch (e: any) { flash(e.message, false); }
+  }
+
+  function editClass(id: number, patch: Partial<ClassRow>) {
+    setClasses(x => x.map(c => (c.id === id ? { ...c, ...patch } : c)));
+    setDirty(d => ({ ...d, [id]: true }));
+  }
+
+  async function saveClass(c: ClassRow, quiet = false) {
+    await api(`/classes/${c.id}`, { method: 'PUT', body: JSON.stringify({
+      name: c.name, section: c.section, description: c.description || '', class_teacher_id: c.class_teacher_id || null,
+    }) });
+    setDirty(d => { const n = { ...d }; delete n[c.id]; return n; });
+    if (!quiet) flash(`${c.name} ${c.section} saved.`);
+  }
+
+  async function saveOne(c: ClassRow) {
+    try { await saveClass(c); } catch (e: any) { flash(e.message, false); }
+  }
+
+  async function saveAll() {
+    const changed = classes.filter(c => dirty[c.id]);
+    if (!changed.length) return flash('No changes to save.');
+    try {
+      for (const c of changed) await saveClass(c, true);
+      flash(`Saved ${changed.length} class(es).`);
+    } catch (e: any) { flash(e.message, false); }
+  }
+
+  async function deleteClass(c: ClassRow) {
+    if (!confirm(`Delete class ${c.name} ${c.section}?`)) return;
+    try {
+      await api(`/classes/${c.id}`, { method: 'DELETE' });
+      setClasses(await api<ClassRow[]>('/classes'));
+      flash('Class deleted.');
+    } catch (e: any) { flash(e.message, false); }
   }
 
   const TABS: { key: typeof tab; label: string }[] = [
@@ -75,7 +111,11 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {msg && <div className="text-sm bg-green-50 border border-green-200 text-green-700 rounded px-3 py-2 mb-3">{msg}</div>}
+      {msg && (
+        <div className={`text-sm rounded px-3 py-2 mb-3 border ${msg.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {msg.text}
+        </div>
+      )}
 
       {tab === 'classes' && (
         <div className="card p-4">
@@ -90,24 +130,25 @@ export default function SettingsPage() {
           <div className="overflow-x-auto">
             <table className="table text-sm">
               <thead><tr>
-                <th>Class Name</th><th>Section</th><th>Description</th><th>Approver Teacher</th><th>Status</th><th>Action</th>
+                <th>Class Name</th><th>Section</th><th>Description</th><th>Approver Teacher</th><th>Students</th><th>Action</th>
               </tr></thead>
               <tbody>
                 {classes.map(c => (
                   <tr key={c.id}>
-                    <td>{c.name}</td>
-                    <td>{c.section}</td>
-                    <td>{c.description || '—'}</td>
+                    <td><input className="input" value={c.name} onChange={e => editClass(c.id, { name: e.target.value })} /></td>
+                    <td><input className="input w-20" value={c.section} onChange={e => editClass(c.id, { section: e.target.value })} /></td>
+                    <td><input className="input" value={c.description || ''} onChange={e => editClass(c.id, { description: e.target.value })} /></td>
                     <td>
-                      <select className="input">
+                      <select className="input" value={c.class_teacher_id ?? ''}
+                        onChange={e => editClass(c.id, { class_teacher_id: e.target.value ? Number(e.target.value) : null })}>
                         <option value="">— Select Teacher —</option>
                         {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
                       </select>
                     </td>
-                    <td><span className="badge badge-green">Active</span></td>
-                    <td>
-                      <button className="btn btn-primary text-xs py-1 mr-1">Save</button>
-                      <button className="text-xs text-red-600 hover:underline">Delete</button>
+                    <td>{c.strength ?? 0}</td>
+                    <td className="whitespace-nowrap">
+                      <button className="btn btn-primary text-xs py-1 mr-1" onClick={() => saveOne(c)} disabled={!dirty[c.id]}>Save</button>
+                      <button className="text-xs text-red-600 hover:underline" onClick={() => deleteClass(c)}>Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -117,7 +158,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex gap-2 mt-4">
-            <button className="btn btn-primary">Save</button>
+            <button className="btn btn-primary" onClick={saveAll}>Save All Changes</button>
             <button className="btn bg-gray-200" onClick={() => setTab('school')}>Exit</button>
           </div>
         </div>

@@ -5,26 +5,29 @@ import Shell from '@/components/Shell';
 import { api } from '@/lib/api';
 
 type ClassRow = { id: number; name: string; section: string };
-type Poll = { id?: number; class_id?: number; section?: string; question: string; option1: string; option2: string; option3?: string; option4?: string; expire_date: string };
+type Poll = { id: number; class_id: number | null; class_name?: string | null; class_section?: string | null; section?: string | null; question: string; option1: string; option2: string; option3?: string | null; option4?: string | null; expire_date: string };
 
 export default function SurveysPage() {
   const [tab, setTab] = useState<'add' | 'manage' | 'report'>('add');
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  function flash(text: string, ok = true) { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000); }
+  async function loadPolls() {
+    try { setPolls(await api<Poll[]>('/surveys')); } catch (e: any) { flash(e.message, false); }
+  }
 
   useEffect(() => {
     api<ClassRow[]>('/classes').then(setClasses).catch(() => {});
-    // Polls endpoint optional; keep local list if unavailable
+    loadPolls();
   }, []);
-
-  function flash(m: string) { setMsg(m); setTimeout(() => setMsg(null), 2500); }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const f = e.target as any;
-    const p: Poll = {
-      class_id: f.class_id.value ? Number(f.class_id.value) : undefined,
+    const p = {
+      class_id: f.class_id.value ? Number(f.class_id.value) : null,
       section: f.section.value,
       question: f.question.value,
       option1: f.option1.value,
@@ -33,9 +36,18 @@ export default function SurveysPage() {
       option4: f.option4.value,
       expire_date: f.expire_date.value,
     };
-    setPolls(x => [{ ...p, id: Date.now() }, ...x]);
-    f.reset();
-    flash('Survey saved.');
+    try {
+      await api('/surveys', { method: 'POST', body: JSON.stringify(p) });
+      f.reset();
+      flash('Survey saved.');
+      loadPolls();
+    } catch (e: any) { flash(e.message, false); }
+  }
+
+  async function remove(p: Poll) {
+    if (!confirm('Delete this survey?')) return;
+    try { await api(`/surveys/${p.id}`, { method: 'DELETE' }); loadPolls(); }
+    catch (e: any) { flash(e.message, false); }
   }
 
   const TABS: { key: typeof tab; label: string }[] = [
@@ -62,7 +74,11 @@ export default function SurveysPage() {
         ))}
       </div>
 
-      {msg && <div className="text-sm bg-green-50 border border-green-200 text-green-700 rounded px-3 py-2 mb-3">{msg}</div>}
+      {msg && (
+        <div className={`text-sm rounded px-3 py-2 mb-3 border ${msg.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {msg.text}
+        </div>
+      )}
 
       {tab === 'add' && (
         <form onSubmit={save} className="card p-4 grid md:grid-cols-2 gap-3 text-sm">
@@ -87,18 +103,19 @@ export default function SurveysPage() {
         <div className="card p-4 overflow-x-auto">
           <h3 className="font-semibold text-brand-700 mb-3">Manage Survey</h3>
           <table className="table">
-            <thead><tr><th>Question</th><th>Class</th><th>Section</th><th>Options</th><th>Expires</th></tr></thead>
+            <thead><tr><th>Question</th><th>Class</th><th>Section</th><th>Options</th><th>Expires</th><th></th></tr></thead>
             <tbody>
               {polls.map(p => (
                 <tr key={p.id}>
                   <td>{p.question}</td>
-                  <td>{classes.find(c => c.id === p.class_id)?.name || 'All'}</td>
+                  <td>{p.class_name ? `${p.class_name} ${p.class_section}` : 'All'}</td>
                   <td>{p.section || '—'}</td>
                   <td>{[p.option1, p.option2, p.option3, p.option4].filter(Boolean).join(' / ')}</td>
                   <td>{p.expire_date}</td>
+                  <td><button className="text-xs text-red-600 hover:underline" onClick={() => remove(p)}>Delete</button></td>
                 </tr>
               ))}
-              {!polls.length && <tr><td colSpan={5} className="text-center text-gray-500 py-4">No surveys yet.</td></tr>}
+              {!polls.length && <tr><td colSpan={6} className="text-center text-gray-500 py-4">No surveys yet.</td></tr>}
             </tbody>
           </table>
         </div>

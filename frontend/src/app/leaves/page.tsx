@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api } from '@/lib/api';
+import { api, getUser, localDate } from '@/lib/api';
 
 const LEAVE_TYPES = [
   'Casual Leave',
@@ -40,9 +40,10 @@ type Leave = {
 
 type BalanceRow = { leave_type: string; allowed: number; availed: number; extra: number; balance: number };
 
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayStr() { return localDate(); }
 
 export default function LeavesPage() {
+  const isAdmin = getUser<any>()?.role === 'admin';
   const [rows, setRows] = useState<Leave[]>([]);
   const [balances, setBalances] = useState<Record<number, BalanceRow[]>>({});
   const [err, setErr] = useState<string | null>(null);
@@ -215,7 +216,9 @@ export default function LeavesPage() {
                 {/* Action panel */}
                 <div className="p-3">
                   <div className="font-semibold mb-2 text-brand-700">Decision</div>
-                  {leave.status === 'pending' ? (
+                  {leave.status === 'pending' && !isAdmin ? (
+                    <div className="text-xs text-gray-500">Awaiting a decision from the admin.</div>
+                  ) : leave.status === 'pending' ? (
                     <div className="space-y-2">
                       <div className="grid grid-cols-2 gap-2">
                         <div>

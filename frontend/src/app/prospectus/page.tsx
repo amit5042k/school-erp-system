@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api } from '@/lib/api';
+import { api, localDate } from '@/lib/api';
 
 type ClassRow = { id: number; name: string; section: string };
 type Registration = {
@@ -11,7 +11,8 @@ type Registration = {
   session: string;
   date: string;
   class_id?: number;
-  class_name?: string;
+  class_name?: string | null;
+  class_section?: string | null;
   first_name: string;
   last_name: string;
   father_name: string;
@@ -39,18 +40,14 @@ const CLASS_GROUPS = [
   'XII MEDICAL', 'XII NON-MEDICAL', 'XII COMMERCE', 'XII HUMANITIES',
 ];
 
-function nextNumber(prev: string): string {
-  const m = prev.match(/^(.+)\/(\d+)$/);
-  if (!m) return prev;
-  return `${m[1]}/${String(Number(m[2]) + 1).padStart(3, '0')}`;
-}
+const classLabel = (r: Registration) => (r.class_name ? `${r.class_name} ${r.class_section || ''}`.trim() : '');
 
 export default function ProspectusPage() {
-  const [prospectusNo, setProspectusNo] = useState('UE/26-27/207');
+  const [prospectusNo, setProspectusNo] = useState('');
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [rows, setRows] = useState<Registration[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const today = localDate();
 
   const [form, setForm] = useState<Omit<Registration, 'id' | 'prospectus_no' | 'class_name'>>({
     session: '2026-2027', date: today, class_id: undefined, first_name: '', last_name: '',
@@ -59,32 +56,41 @@ export default function ProspectusPage() {
     payment_mode: 'Cash', bank_charges: 0, total_amount: 0, address: '', remarks: '',
   });
 
-  useEffect(() => { api<ClassRow[]>('/classes').then(setClasses).catch(() => {}); }, []);
+  function flash(text: string, ok = true) { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000); }
 
-  function flash(m: string) { setMsg(m); setTimeout(() => setMsg(null), 2500); }
+  async function load() {
+    try {
+      setRows(await api<Registration[]>('/prospectus'));
+      setProspectusNo((await api<{ prospectus_no: string }>('/prospectus/next-no')).prospectus_no);
+    } catch (e: any) { flash(e.message, false); }
+  }
+  useEffect(() => {
+    api<ClassRow[]>('/classes').then(setClasses).catch(() => {});
+    load();
+  }, []);
 
-  function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
-    const cls = classes.find(c => c.id === form.class_id);
-    const total = Number(form.prospectus_amount || 0) + Number(form.bank_charges || 0);
-    setRows(x => [{
-      id: Date.now(),
-      prospectus_no: prospectusNo,
-      class_name: cls ? `${cls.name} ${cls.section}` : undefined,
-      ...form,
-      total_amount: total,
-    }, ...x]);
-    setProspectusNo(nextNumber(prospectusNo));
-    setForm({ ...form, first_name: '', last_name: '', father_name: '', mother_name: '', phone: '', alt_number: '', email: '', dob: '', last_school: '', prev_marks: '', prospectus_char: '', prospectus_amount: 0, bank_charges: 0, total_amount: 0, address: '', remarks: '' });
-    flash('Registration saved.');
+    try {
+      // The server assigns the prospectus number and total, so two desks saving at once can't clash.
+      const { id } = await api<{ id: number }>('/prospectus', { method: 'POST', body: JSON.stringify(form) });
+      const saved = await api<Registration>(`/prospectus/${id}`);
+      setForm({ ...form, first_name: '', last_name: '', father_name: '', mother_name: '', phone: '', alt_number: '', email: '', dob: '', last_school: '', prev_marks: '', prospectus_char: '', prospectus_amount: 0, bank_charges: 0, total_amount: 0, address: '', remarks: '' });
+      flash(`Registration saved as ${saved.prospectus_no}.`);
+      load();
+    } catch (e: any) { flash(e.message, false); }
   }
 
   const summary = useMemo(() => {
     return CLASS_GROUPS.map(name => {
-      const matching = rows.filter(r => (r.class_name || '').toUpperCase().startsWith(name));
+      // Match the whole class name ("I", not the "I" at the start of "II"/"IV"/"IX").
+      const matching = rows.filter(r => {
+        const label = classLabel(r).toUpperCase();
+        return label === name || label.startsWith(name + ' ');
+      });
       const boys = matching.filter(r => r.gender === 'M').length;
       const girls = matching.filter(r => r.gender === 'F').length;
-      return { name, boys, girls, total: boys + girls };
+      return { name, boys, girls, total: matching.length };
     });
   }, [rows]);
 
@@ -97,12 +103,16 @@ export default function ProspectusPage() {
         <span className="text-sm text-gray-500">New Registration</span>
       </div>
 
-      {msg && <div className="text-sm bg-green-50 border border-green-200 text-green-700 rounded px-3 py-2 mb-3">{msg}</div>}
+      {msg && (
+        <div className={`text-sm rounded px-3 py-2 mb-3 border ${msg.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {msg.text}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-4">
         <form onSubmit={save} className="card p-4 lg:col-span-2 grid md:grid-cols-3 gap-3 text-sm">
           <h3 className="md:col-span-3 font-semibold text-brand-700">New Registration</h3>
-          <div><label className="label">Prospectus No</label><input className="input" readOnly value={prospectusNo} /></div>
+          <div><label className="label">Prospectus No</label><input className="input" readOnly value={prospectusNo} title="Assigned when you save" /></div>
           <div><label className="label">Session</label><input className="input" value={form.session} onChange={e => setForm({ ...form, session: e.target.value })} /></div>
           <div><label className="label">Date</label><input className="input" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
           <div><label className="label">Class</label>
@@ -166,7 +176,7 @@ export default function ProspectusPage() {
                 <tr key={r.id}>
                   <td>{r.prospectus_no}</td><td>{r.date}</td>
                   <td>{r.first_name} {r.last_name}</td>
-                  <td>{r.class_name || '—'}</td>
+                  <td>{classLabel(r) || '—'}</td>
                   <td>{r.father_name}</td><td>{r.phone}</td>
                   <td>₹{r.total_amount}</td>
                 </tr>

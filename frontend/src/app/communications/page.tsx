@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api } from '@/lib/api';
+import { api, fmtDateTime, parseDate } from '@/lib/api';
 
 type QuickLink = { label: string; onClick?: () => void };
 
@@ -46,7 +46,7 @@ export default function CommunicationsPage() {
 
   const now = Date.now();
   const windowMs = period === '7d' ? 7 : period === '30d' ? 30 : 90;
-  const filtered = rows.filter(r => (now - new Date(r.sent_at).getTime()) / 86400000 <= windowMs);
+  const filtered = rows.filter(r => (now - (parseDate(r.sent_at)?.getTime() ?? 0)) / 86400000 <= windowMs);
   const totalSms = filtered.filter(r => r.channel === 'sms').reduce((n, r) => n + (r.recipient_count || 0), 0);
   const totalPush = filtered.filter(r => r.channel === 'push').reduce((n, r) => n + (r.recipient_count || 0), 0);
   const totalEmail = filtered.filter(r => r.channel === 'email').reduce((n, r) => n + (r.recipient_count || 0), 0);
@@ -119,7 +119,7 @@ export default function CommunicationsPage() {
         {err && <div className="text-red-700 text-sm mb-2">{err}</div>}
         <table className="table"><thead><tr><th>When</th><th>Channel</th><th>Audience</th><th>Subject</th><th>Recipients</th><th>By</th></tr></thead>
           <tbody>{rows.map(c => <tr key={c.id}>
-            <td>{new Date(c.sent_at).toLocaleString()}</td>
+            <td>{fmtDateTime(c.sent_at)}</td>
             <td><span className="badge badge-gray uppercase">{c.channel}</span></td>
             <td>{c.audience}</td><td>{c.subject} <div className="text-xs text-gray-500">{c.body}</div></td>
             <td>{c.recipient_count}</td><td>{c.sent_by_name || '—'}</td></tr>)}

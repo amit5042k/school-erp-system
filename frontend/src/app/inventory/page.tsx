@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import ExploreOptions from '@/components/ExploreOptions';
-import { api } from '@/lib/api';
+import { api, fmtDateTime } from '@/lib/api';
 
 export default function InventoryPage() {
   const [tab, setTab] = useState<null | 'items' | 'movements'>(null);
@@ -130,7 +130,7 @@ export default function InventoryPage() {
               </form>
               <div className="card p-4 overflow-x-auto">
                 <table className="table"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Qty</th><th>Reference</th><th>Note</th></tr></thead>
-                  <tbody>{mv.map(m => <tr key={m.id}><td>{new Date(m.moved_at).toLocaleString()}</td>
+                  <tbody>{mv.map(m => <tr key={m.id}><td>{fmtDateTime(m.moved_at)}</td>
                     <td>{m.sku} — {m.item_name}</td><td><span className="badge badge-gray">{m.movement_type}</span></td>
                     <td>{m.qty}</td><td>{m.reference}</td><td>{m.note}</td></tr>)}
                     {!mv.length && <tr><td colSpan={6} className="text-center py-3 text-gray-500">No movements.</td></tr>}
