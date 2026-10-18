@@ -509,6 +509,8 @@ function init() {
   tryAlter(`ALTER TABLE classes ADD COLUMN description TEXT`);
   tryAlter(`ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0`);
   tryAlter(`ALTER TABLE users ADD COLUMN last_login_at TEXT`);
+  // Set (e.g. by Finance for fee defaulters) to block sign-in with a reason, without disabling the account.
+  tryAlter(`ALTER TABLE users ADD COLUMN blocked_reason TEXT`);
 
   // Shared profile fields used across modules (reports, payroll, ID cards, promotion).
   for (const col of [

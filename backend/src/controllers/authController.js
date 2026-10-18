@@ -20,6 +20,7 @@ exports.login = (req, res) => {
   // Compare against a dummy hash when the user doesn't exist so response time doesn't reveal valid usernames.
   const ok = bcrypt.compareSync(password, user ? user.password_hash : DUMMY_HASH) && !!user;
   if (!ok || (role && user.role !== role)) return res.status(401).json({ error: 'Invalid credentials' });
+  if (user.blocked_reason) return res.status(403).json({ error: `Access blocked: ${user.blocked_reason}. Please contact the school office.` });
 
   db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(new Date().toISOString(), user.id);
   db.prepare("INSERT INTO audit_log (user_id, action, path, status, ip) VALUES (?, 'LOGIN', '/api/auth/login', 200, ?)").run(user.id, req.ip);
