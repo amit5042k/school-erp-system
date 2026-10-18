@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api } from '@/lib/api';
+import FileUpload from '@/components/FileUpload';
+import { api, fileUrl } from '@/lib/api';
+import PromotePanel from '../academic/_components/PromotePanel';
+import SectionsPanel from '../academic/_components/SectionsPanel';
+import SwapPanel from '../academic/_components/SwapPanel';
 
 type ClassRow = { id: number; name: string; section: string; description?: string | null; class_teacher_id?: number | null; strength?: number };
 type Teacher = { id: number; full_name: string };
@@ -164,26 +168,9 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {tab === 'section' && (
-        <div className="card p-4 text-sm text-gray-600">
-          <h3 className="font-semibold text-brand-700 mb-2">Manage Section</h3>
-          Section management coming soon.
-        </div>
-      )}
-
-      {tab === 'swap' && (
-        <div className="card p-4 text-sm text-gray-600">
-          <h3 className="font-semibold text-brand-700 mb-2">Swap Section</h3>
-          Swap students between sections — coming soon.
-        </div>
-      )}
-
-      {tab === 'promote' && (
-        <div className="card p-4 text-sm text-gray-600">
-          <h3 className="font-semibold text-brand-700 mb-2">Promote Students</h3>
-          Promote students to next class/session — coming soon.
-        </div>
-      )}
+      {tab === 'section' && <SectionsPanel />}
+      {tab === 'swap' && <SwapPanel />}
+      {tab === 'promote' && <PromotePanel />}
 
       {tab === 'school' && s && (
         <form onSubmit={saveSettings} className="card p-4 grid md:grid-cols-2 gap-3 text-sm">
@@ -194,7 +181,17 @@ export default function SettingsPage() {
           <div><label className="label">Phone</label><input className="input" value={s.phone || ''} onChange={e => setS({ ...s, phone: e.target.value })} /></div>
           <div><label className="label">Email</label><input className="input" type="email" value={s.email || ''} onChange={e => setS({ ...s, email: e.target.value })} /></div>
           <div><label className="label">Website</label><input className="input" value={s.website || ''} onChange={e => setS({ ...s, website: e.target.value })} /></div>
-          <div><label className="label">Logo URL</label><input className="input" value={s.logo_url || ''} onChange={e => setS({ ...s, logo_url: e.target.value })} /></div>
+          <div>
+            <FileUpload label="School Logo" accept="image/png,image/jpeg,image/webp,image/gif" onUploaded={f => setS({ ...s, logo_url: f[0].url })} />
+            {s.logo_url && (
+              <div className="flex items-center gap-2 mt-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={fileUrl(s.logo_url)} alt="School logo" className="h-12 w-12 object-contain border rounded bg-white" />
+                <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => setS({ ...s, logo_url: '' })}>Remove</button>
+                <span className="text-xs text-gray-500">Click Save Settings to keep the change.</span>
+              </div>
+            )}
+          </div>
           <div className="md:col-span-2"><button className="btn btn-primary">Save Settings</button></div>
         </form>
       )}
