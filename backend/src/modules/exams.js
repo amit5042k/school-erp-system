@@ -747,7 +747,11 @@ const h = {
         let sg = 0, sm = 0;
         for (const e of exams) {
           const m = mine.find(x => x.exam_id === e.id && x.subject === c.subject);
-          if (m) { perExam[e.id] = { marks: m.marks_obtained, max: m.max_marks, grade: m.grade }; sg += m.marks_obtained; sm += m.max_marks; }
+          if (m) {
+            // A grade typed at entry wins; otherwise use the grading scale, so blank grades still print.
+            const g = m.grade || (m.max_marks ? gradeFor((m.marks_obtained / m.max_marks) * 100, bands)?.grade : null) || null;
+            perExam[e.id] = { marks: m.marks_obtained, max: m.max_marks, grade: g }; sg += m.marks_obtained; sm += m.max_marks;
+          }
         }
         const pct = sm ? round((sg / sm) * 100) : null;
         const passMark = c.pass_marks != null && c.max_marks ? (c.pass_marks / c.max_marks) * 100 : passPct;

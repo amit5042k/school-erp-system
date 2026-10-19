@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { clearSession, getToken, getUser } from '@/lib/api';
+import { api, clearSession, getToken, getUser } from '@/lib/api';
 
 /**
  * Sidebar configuration.
@@ -60,7 +60,6 @@ const NAV: NavItem[] = [
   { label: 'Reports',               href: '/reports',               icon: '📊' },
 ];
 
-const SESSIONS = ['2021-2022','2022-2023','2023-2024','2024-2025','2025-2026','2026-2027'];
 
 function navFor(role: Role): NavItem[] {
   const can = (i: NavItem, inherited?: Role[]) => (i.roles || inherited || ['admin', 'teacher']).includes(role);
@@ -83,7 +82,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<any>(null);
   const [showNav, setShowNav] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const [session, setSession] = useState('2026-2027');
+  const [session, setSession] = useState<string>('');
   const [menuOpen, setMenuOpen] = useState<'user' | 'notif' | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +90,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     const u = getUser();
     if (!u || !getToken()) { clearSession(); router.replace('/login'); return; }
     if (u.mustChangePassword && pathname !== '/change-password') { router.replace('/change-password?required=1'); return; }
+    api<{ academic_year?: string }>('/settings').then(s => setSession(s?.academic_year || '')).catch(() => {});
     setUserState(u);
   }, [router, pathname]);
 
@@ -198,14 +198,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <Link href="/announcements" className="opacity-90 hover:opacity-100">Circulars</Link>
               <Link href="/birthdays" className="opacity-90 hover:opacity-100">Birthdays</Link>
 
-              <select
-                value={session}
-                onChange={e => setSession(e.target.value)}
-                className="bg-brand-600 text-white text-xs rounded px-2 py-1 border border-brand-500"
-                title="Academic Session"
-              >
-                {SESSIONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              {session && (user.role === 'admin' ? (
+                <Link href="/settings" className="bg-brand-600 text-white text-xs rounded px-2 py-1 border border-brand-500" title="Change the academic session in Settings › School Settings">
+                  Session {session}
+                </Link>
+              ) : (
+                <span className="bg-brand-600 text-white text-xs rounded px-2 py-1 border border-brand-500">Session {session}</span>
+              ))}
             </div>
 
             <div className="relative" ref={menuRef}>

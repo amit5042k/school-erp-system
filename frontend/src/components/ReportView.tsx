@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { api, downloadCsv, fmtDate, fmtMoney } from '@/lib/api';
+import { api, downloadCsv, fmtDate, fmtMoney, sessionList } from '@/lib/api';
 
 export type ReportParam = {
   name: string; label?: string; required?: boolean; default?: string;
@@ -14,7 +14,6 @@ type ReportResult = {
   params: ReportParam[]; columns: ReportColumn[]; values: Record<string, string>; rows: any[]; generated_at: string;
 };
 
-const SESSIONS = ['2023-2024', '2024-2025', '2025-2026', '2026-2027', '2027-2028'];
 
 function cell(v: any, c: ReportColumn) {
   if (v == null || v === '') return '—';
@@ -32,6 +31,7 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lookups, setLookups] = useState<{ classes: any[]; students: any[]; teachers: any[] }>({ classes: [], students: [], teachers: [] });
+  const [sessions, setSessions] = useState<string[]>([]);
 
   async function run(v: Record<string, string> = values) {
     setBusy(true); setErr(null);
@@ -50,6 +50,7 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
   useEffect(() => {
     if (needs.has('class')) api<any[]>('/classes').then(classes => setLookups(l => ({ ...l, classes }))).catch(() => {});
     if (needs.has('student')) api<any[]>('/students').then(students => setLookups(l => ({ ...l, students }))).catch(() => {});
+    if (needs.has('session')) api<{ academic_year?: string }>('/settings').then(s => setSessions(sessionList(s?.academic_year))).catch(() => {});
     if (needs.has('teacher')) api<any[]>('/teachers').then(teachers => setLookups(l => ({ ...l, teachers }))).catch(() => {});
   }, [needs]);
 
@@ -82,7 +83,7 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
         {lookups.teachers.map(t => <option key={t.id} value={t.id}>{t.employee_no} — {t.full_name}</option>)}
       </select>);
     if (p.type === 'select' || p.type === 'session') {
-      const options = p.type === 'session' ? SESSIONS : p.options || [];
+      const options = p.type === 'session' ? sessions : p.options || [];
       return (
         <select className="input" value={v} onChange={e => set(e.target.value)}>
           {!p.required && <option value="">All</option>}

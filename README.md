@@ -80,8 +80,12 @@ Edit `backend/.env` and change `JWT_SECRET` for anything other than local dev.
 ### 3. Seed demo data
 
 ```bash
-npm run seed
+cd backend && npm run seed:dev   # local development: wipes and reloads demo data
 ```
+
+`npm run seed` (without `:dev`) refuses to run on a database that already has users, because seeding
+erases all data. On a fresh database it loads the demo data and makes every account choose a new
+password at first sign-in. Never seed a live school's database.
 
 Demo accounts created:
 
@@ -128,10 +132,20 @@ npm run dev
 
 ## Production notes
 
-- Change `JWT_SECRET` and do not commit `.env`.
-- Swap SQLite for Postgres/MySQL by replacing `backend/src/config/db.js`.
-- Put the backend behind HTTPS; `helmet` and rate-limit are already wired.
-- Build the frontend with `npm run build && npm run start`.
+- Set a strong `JWT_SECRET` (`openssl rand -hex 32`); the backend refuses to start without one. Never commit `.env`.
+- Set `NEXT_PUBLIC_API_BASE` (e.g. `https://api.yourdomain.com/api`) **before** `npm run build` — it is baked into the frontend.
+- Keep `backend/data/` (database + daily backups) and `backend/uploads/` (uploaded files) on persistent storage, and copy a backup off the server regularly (Backups page in the admin menu, or `npm run backup`).
+- To restore: stop the backend, replace `backend/data/school.sqlite` with a backup file, start it again.
+- SMS and email are optional; configure `SMS_API_URL` / `SMTP_*` in `backend/.env` (see `.env.example`). Until then messages are logged as "not configured".
+- Sign-in is rate-limited on failed attempts (10 per account and 100 per network per 15 minutes).
+- Put the backend behind HTTPS; `helmet` and rate limiting are already wired.
+
+## How the code is organised
+
+- `backend/src/modules/*.js` — one file per feature area, loaded automatically. Each creates its own tables and
+  registers routes, **reports** (`registerReport`, shown at `/report/<key>` with filters, totals, Excel and print)
+  and **master lists** (`registerMaster`, edited at `/masters/<type>`).
+- `frontend/src/components/ReportView.tsx`, `ModulePage.tsx`, `FileUpload.tsx` — shared report, list/form and upload UI.
 
 ## Extended API summary (in addition to base)
 

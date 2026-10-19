@@ -66,6 +66,7 @@ export default function ProspectusPage() {
   }
   useEffect(() => {
     api<ClassRow[]>('/classes').then(setClasses).catch(() => {});
+    api<{ academic_year?: string }>('/settings').then(st => { if (st?.academic_year) setForm(f => ({ ...f, session: st.academic_year! })); }).catch(() => {});
     load();
   }, []);
 

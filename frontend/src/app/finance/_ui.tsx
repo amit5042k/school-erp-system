@@ -56,7 +56,12 @@ export function Flash({ msg }: { msg: { ok: boolean; text: string } | null }) {
 
 export function useFlash() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const flash = (text: string, ok = true) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 4000); };
+  // Errors stay until the next message so they aren't missed; confirmations fade.
+  const flash = (text: string, ok = true) => {
+    setMsg({ ok, text });
+    if (ok) setTimeout(() => setMsg(m => (m && m.text === text ? null : m)), 4000);
+    else if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   return { msg, flash };
 }
 

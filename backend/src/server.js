@@ -21,7 +21,18 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000', crede
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
-app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 30 }));
+// Only failed sign-ins count, so a whole staff room behind one school IP can log in at 8am.
+// Per username+IP stops password guessing on one account; per IP stops spraying many accounts.
+const loginLimitMsg = { error: 'Too many failed sign-in attempts. Please wait 15 minutes and try again.' };
+app.use('/api/auth/login', rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10, skipSuccessfulRequests: true, message: loginLimitMsg,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => `${req.ip}|${String(req.body?.username || '').toLowerCase().slice(0, 64)}`,
+}));
+app.use('/api/auth/login', rateLimit({
+  windowMs: 15 * 60 * 1000, max: 100, skipSuccessfulRequests: true, message: loginLimitMsg,
+  standardHeaders: true, legacyHeaders: false,
+}));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'school-erp-backend', time: new Date().toISOString() }));
 // Activity log: every change (non-GET) request by a signed-in user.

@@ -142,9 +142,10 @@ const tx = db.transaction(() => {
   iSch.run(examId, c8A, 'English', '2025-08-24', '09:00', '12:00', 100);
   const iM = db.prepare(`INSERT INTO marks (exam_id, student_id, subject, marks_obtained, max_marks, grade) VALUES (?, ?, ?, ?, ?, ?)`);
   for (const sid of studentIds.slice(0, 2)) {
-    iM.run(examId, sid, 'Mathematics', 78 + Math.floor(Math.random() * 15), 100, 'A');
-    iM.run(examId, sid, 'Science', 72 + Math.floor(Math.random() * 20), 100, 'A');
-    iM.run(examId, sid, 'English', 80 + Math.floor(Math.random() * 10), 100, 'A+');
+    // Grades are left empty so report cards derive them from the school's grading scale.
+    iM.run(examId, sid, 'Mathematics', 78 + Math.floor(Math.random() * 15), 100, null);
+    iM.run(examId, sid, 'Science', 72 + Math.floor(Math.random() * 20), 100, null);
+    iM.run(examId, sid, 'English', 80 + Math.floor(Math.random() * 10), 100, null);
   }
 
   // Library

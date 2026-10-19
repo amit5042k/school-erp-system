@@ -84,6 +84,17 @@ export function downloadCsv(filename: string, columns: { key: string; label: str
   URL.revokeObjectURL(url);
 }
 
+/** Sessions around `current`, in the same format as the school's academic year ("2025-26" or "2025-2026"). */
+export function sessionList(current: string | null | undefined, before = 3, after = 1): string[] {
+  const m = /^(\d{4})-(\d{2}|\d{4})$/.exec(current || '');
+  if (!m) return current ? [current] : [];
+  const start = Number(m[1]), long = m[2].length === 4;
+  const fmt = (y: number) => `${y}-${long ? y + 1 : String((y + 1) % 100).padStart(2, '0')}`;
+  const out: string[] = [];
+  for (let y = start - before; y <= start + after; y++) out.push(fmt(y));
+  return out;
+}
+
 /** Indian-style money formatting: ₹1,23,456.00 */
 export const fmtMoney = (v: any) => {
   const n = Number(v);
