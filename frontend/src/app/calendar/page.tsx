@@ -2,7 +2,33 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api, getUser } from '@/lib/api';
+import { api, fileUrl, getUser, upload } from '@/lib/api';
+
+/** Upload a file for an event (or clear it); shows a link to the current one. */
+function AttachmentCell({ value, onChange }: { value?: string | null; onChange: (v: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function pick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files;
+    if (!f || !f.length) return;
+    setBusy(true); setErr(null);
+    try { onChange((await upload(f))[0].url); } catch (ex: any) { setErr(ex.message); }
+    finally { setBusy(false); e.target.value = ''; }
+  }
+  return (
+    <div className="min-w-[10rem]">
+      <input className="input" type="file" disabled={busy} onChange={pick} />
+      {busy && <div className="text-[11px] text-gray-500">Uploading…</div>}
+      {err && <div className="text-[11px] text-red-600">{err}</div>}
+      {value && (
+        <div className="text-[11px] mt-1">
+          <a href={fileUrl(value)} target="_blank" rel="noreferrer" className="text-brand-600 underline">Current file</a>
+          <button type="button" className="text-red-600 hover:underline ml-2" onClick={() => onChange('')}>remove</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type EventType = 'Event' | 'Holiday' | 'Special Day' | 'Workshop For Teachers' | 'Workshop For Students';
 type Event = {
@@ -92,7 +118,7 @@ export default function CalendarPage() {
                 </td>
                 <td><input className="input" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Event Name" /></td>
                 <td><input className="input" value={draft.description || ''} onChange={e => setDraft({ ...draft, description: e.target.value })} placeholder="Description" /></td>
-                <td><input className="input" value={draft.attachment || ''} onChange={e => setDraft({ ...draft, attachment: e.target.value })} placeholder="Link to file (https://…)" /></td>
+                <td><AttachmentCell value={draft.attachment} onChange={v => setDraft({ ...draft, attachment: v })} /></td>
                 <td><button className="btn btn-primary text-xs py-1" onClick={add}>Save</button></td>
               </tr>
             )}
@@ -106,7 +132,7 @@ export default function CalendarPage() {
                 </td>
                 <td><input className="input" value={ev.name} onChange={e => patch(ev.id, { name: e.target.value })} /></td>
                 <td><input className="input" value={ev.description || ''} onChange={e => patch(ev.id, { description: e.target.value })} /></td>
-                <td><input className="input" value={ev.attachment || ''} onChange={e => patch(ev.id, { attachment: e.target.value })} placeholder="https://…" /></td>
+                <td><AttachmentCell value={ev.attachment} onChange={v => patch(ev.id, { attachment: v })} /></td>
                 <td className="whitespace-nowrap">
                   <button className="btn btn-primary text-xs py-1 mr-1" onClick={() => update(ev)}>Save</button>
                   <button className="text-xs text-red-600 hover:underline" onClick={() => remove(ev)}>Delete</button>
@@ -115,7 +141,7 @@ export default function CalendarPage() {
             ) : (
               <tr key={ev.id}>
                 <td>{ev.event_date}</td><td>{ev.type}</td><td>{ev.name}</td><td>{ev.description || '—'}</td>
-                <td>{ev.attachment ? <a href={ev.attachment} target="_blank" rel="noreferrer" className="text-brand-600 underline">View</a> : '—'}</td>
+                <td>{ev.attachment ? <a href={fileUrl(ev.attachment)} target="_blank" rel="noreferrer" className="text-brand-600 underline">View</a> : '—'}</td>
               </tr>
             ))}
             {!events.length && <tr><td colSpan={isAdmin ? 6 : 5} className="text-center py-3 text-gray-500">No events yet.{isAdmin && ' Add one in the top row.'}</td></tr>}

@@ -37,7 +37,7 @@ const NAV: NavItem[] = [
     { label: 'Awards',         href: '/awards', roles: ALL },
   ]},
   { label: 'Communication',         href: '/communications',        icon: '💬' },
-  { label: 'Online Survey',         href: '/surveys',               icon: '🗳' },
+  { label: 'Online Survey',         href: '/surveys',               icon: '🗳', roles: ALL },
   { label: 'Suggestion Box',        href: '/suggestions',           icon: '💡', roles: ALL },
   { label: 'Manage Activities',     href: '/activities',            icon: '🎭' },
   { label: 'Library Management',    href: '/library',               icon: '📖' },

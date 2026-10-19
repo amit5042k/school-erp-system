@@ -125,7 +125,8 @@ crud('/payroll', m.payroll, { read: ADMIN });
 crud('/awards', m.awards, { read: ALL });
 
 // Academics
-crud('/homework', m.homework, { read: ALL, write: STAFF });
+// Students and parents read homework through /comm/homework, which is scoped to their class.
+crud('/homework', m.homework, { read: STAFF, write: STAFF });
 crud('/events', m.events, { read: ALL });
 crud('/surveys', m.surveys, { read: ALL, write: STAFF });
 crud('/activities', m.activities, { read: ALL, write: STAFF });

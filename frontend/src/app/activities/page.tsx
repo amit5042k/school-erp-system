@@ -2,16 +2,30 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api } from '@/lib/api';
+import FileUpload from '@/components/FileUpload';
+import { api, fileUrl, fmtDate } from '@/lib/api';
 
 type ClassRow = { id: number; name: string; section: string };
-type Activity = { id: number; class_id: number | null; class_name?: string | null; class_section?: string | null; section?: string | null; name: string; activity_date: string; description?: string | null; file_names?: string | null };
+type Activity = {
+  id: number; class_id: number | null; class_name?: string | null; class_section?: string | null; section?: string | null;
+  name: string; activity_date: string; description?: string | null; file_names?: string | null; file_urls?: string | null;
+};
+type Item = { url: string; name: string };
+
+const isImage = (u: string) => /\.(jpe?g|png|gif|webp)$/i.test(u);
+const isVideo = (u: string) => /\.mp4$/i.test(u);
+const filesOf = (a: Activity): Item[] => {
+  const urls = (a.file_urls || '').split(',').filter(Boolean);
+  const names = (a.file_names || '').split(',').map(s => s.trim());
+  return urls.map((url, i) => ({ url, name: names[i] || `File ${i + 1}` }));
+};
 
 export default function ActivitiesPage() {
   const [tab, setTab] = useState<'create' | 'manage'>('create');
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [items, setItems] = useState<Activity[]>([]);
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [files, setFiles] = useState<Item[]>([]);
+  const [editing, setEditing] = useState<Activity | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   function flash(text: string, ok = true) { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000); }
@@ -24,6 +38,10 @@ export default function ActivitiesPage() {
     loadItems();
   }, []);
 
+  const saveFiles = (id: number, list: Item[]) => api(`/comm/activities/${id}/files`, { method: 'PUT', body: JSON.stringify({
+    file_urls: list.map(f => f.url), file_names: list.map(f => f.name.replace(/,/g, ' ')),
+  }) });
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const f = e.target as any;
@@ -33,15 +51,21 @@ export default function ActivitiesPage() {
       name: f.name.value,
       activity_date: f.activity_date.value,
       description: f.description.value,
-      file_names: files ? Array.from(files).map(x => x.name).join(', ') : null,
     };
     try {
-      await api('/activities', { method: 'POST', body: JSON.stringify(body) });
+      const { id } = await api<{ id: number }>('/activities', { method: 'POST', body: JSON.stringify(body) });
+      if (files.length) await saveFiles(id, files);
       f.reset();
-      setFiles(null);
+      setFiles([]);
       flash('Activity saved.');
       loadItems();
     } catch (e: any) { flash(e.message, false); }
+  }
+
+  async function saveEditedFiles() {
+    if (!editing) return;
+    try { await saveFiles(editing.id, files); setEditing(null); setFiles([]); flash('Files updated.'); loadItems(); }
+    catch (e: any) { flash(e.message, false); }
   }
 
   async function remove(a: Activity) {
@@ -49,6 +73,22 @@ export default function ActivitiesPage() {
     try { await api(`/activities/${a.id}`, { method: 'DELETE' }); loadItems(); }
     catch (e: any) { flash(e.message, false); }
   }
+
+  const fileList = (
+    <>
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {files.map(f => (
+            <div key={f.url} className="relative border rounded p-1 text-[11px] w-24">
+              {isImage(f.url) ? <img src={fileUrl(f.url)} alt="" className="w-full h-16 object-cover rounded" /> : <div className="h-16 grid place-items-center bg-gray-50">📎</div>}
+              <div className="truncate" title={f.name}>{f.name}</div>
+              <button type="button" className="text-red-600 hover:underline" onClick={() => setFiles(x => x.filter(y => y.url !== f.url))}>remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
 
   return (
     <Shell>
@@ -86,34 +126,63 @@ export default function ActivitiesPage() {
           <div className="md:col-span-2"><label className="label">Activity Name *</label><input className="input" name="name" required /></div>
           <div><label className="label">Activity Date *</label><input className="input" name="activity_date" type="date" required /></div>
           <div>
-            <label className="label">Upload File (multiple)</label>
-            <input className="input" type="file" multiple onChange={e => setFiles(e.target.files)} />
-            <div className="text-[11px] text-gray-500 mt-1">File storage isn&apos;t set up yet: only the file names are saved.</div>
+            <FileUpload multiple accept="image/*,video/mp4,.pdf" label="Upload File (multiple)"
+              onUploaded={up => setFiles(f => [...f, ...up.map(u => ({ url: u.url, name: u.name }))])} />
+            {fileList}
           </div>
           <div className="md:col-span-2"><label className="label">Description</label><textarea className="input" name="description" rows={3} /></div>
           <div className="md:col-span-2"><button className="btn btn-primary">Save</button></div>
         </form>
       )}
 
+      {tab === 'manage' && editing && (
+        <div className="card p-4 mb-4 text-sm">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-semibold text-brand-700">Files for “{editing.name}”</h3>
+            <button className="text-xs text-gray-500 hover:underline" onClick={() => { setEditing(null); setFiles([]); }}>Cancel</button>
+          </div>
+          <FileUpload multiple accept="image/*,video/mp4,.pdf" label="Add more files"
+            onUploaded={up => setFiles(f => [...f, ...up.map(u => ({ url: u.url, name: u.name }))])} />
+          {fileList}
+          <button className="btn btn-primary mt-3" onClick={saveEditedFiles}>Save Files</button>
+        </div>
+      )}
+
       {tab === 'manage' && (
-        <div className="card p-4 overflow-x-auto">
-          <h3 className="font-semibold text-brand-700 mb-3">Manage Activities</h3>
-          <table className="table">
-            <thead><tr><th>Name</th><th>Class</th><th>Date</th><th>Files</th><th>Description</th><th></th></tr></thead>
-            <tbody>
-              {items.map(a => (
-                <tr key={a.id}>
-                  <td>{a.name}</td>
-                  <td>{a.class_name ? `${a.class_name} ${a.class_section}` : 'All'} {a.section}</td>
-                  <td>{a.activity_date}</td>
-                  <td className="text-xs">{a.file_names || '—'}</td>
-                  <td className="text-xs text-gray-500">{a.description || '—'}</td>
-                  <td><button className="text-xs text-red-600 hover:underline" onClick={() => remove(a)}>Delete</button></td>
-                </tr>
-              ))}
-              {!items.length && <tr><td colSpan={6} className="text-center text-gray-500 py-4">No activities yet.</td></tr>}
-            </tbody>
-          </table>
+        <div className="space-y-4">
+          {items.map(a => {
+            const list = filesOf(a);
+            return (
+              <div key={a.id} className="card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-brand-700">{a.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {a.class_name ? `${a.class_name} ${a.class_section}` : 'All classes'}{a.section ? ` · ${a.section}` : ''} · {fmtDate(a.activity_date)}
+                    </div>
+                  </div>
+                  <div className="text-xs">
+                    <button className="text-brand-600 hover:underline mr-3" onClick={() => { setEditing(a); setFiles(list); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Edit Files</button>
+                    <button className="text-red-600 hover:underline" onClick={() => remove(a)}>Delete</button>
+                  </div>
+                </div>
+                {a.description && <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{a.description}</p>}
+                {list.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {list.map(f => (
+                      <a key={f.url} href={fileUrl(f.url)} target="_blank" rel="noreferrer" className="block border rounded overflow-hidden w-28 text-[11px] hover:shadow" title={f.name}>
+                        {isImage(f.url) ? <img src={fileUrl(f.url)} alt={f.name} className="w-full h-20 object-cover" />
+                          : isVideo(f.url) ? <div className="h-20 grid place-items-center bg-gray-900 text-white text-xl">▶</div>
+                          : <div className="h-20 grid place-items-center bg-gray-50 text-xl">📄</div>}
+                        <div className="px-1 truncate">{f.name}</div>
+                      </a>
+                    ))}
+                  </div>
+                ) : a.file_names ? <div className="text-xs text-gray-500 mt-2">Files (names only, from before uploads were available): {a.file_names}</div> : null}
+              </div>
+            );
+          })}
+          {!items.length && <div className="card p-6 text-center text-gray-500">No activities yet.</div>}
         </div>
       )}
     </Shell>
