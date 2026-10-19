@@ -52,7 +52,7 @@ const NAV: NavItem[] = [
   { label: 'School calender',       href: '/calendar',              icon: '📅', roles: ALL },
   { label: 'Student Prospectus',    href: '/prospectus',            icon: '🎓', roles: ADMIN },
   { label: 'Hostel',                href: '/hostel',                icon: '🏨' },
-  { label: 'Payroll Management',    href: '/payroll',               icon: '💰', roles: ADMIN },
+  { label: 'Payroll Management',    href: '/payroll',               icon: '💰', roles: ['admin', 'teacher'] },
   { label: 'Inventory',             href: '/inventory',             icon: '📦', roles: ADMIN },
   { label: 'Users & Roles',         href: '/users',                 icon: '🔐', roles: ADMIN },
   { label: 'Backups',               href: '/backups',               icon: '💾', roles: ADMIN },
