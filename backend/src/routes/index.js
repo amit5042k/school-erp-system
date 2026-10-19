@@ -90,7 +90,8 @@ crud('/prospectus', m.prospectus, { read: ADMIN });
 crud('/exams', m.exams, { read: ALL });
 crud('/exam-schedule', m.examSchedule, { read: ALL, write: STAFF });
 router.get('/marks', authRequired, m.listMarks);
-router.post('/marks', authRequired, requireRole(...STAFF), m.upsertMarks);
+// Teachers enter marks through /exam/marks/bulk, which enforces subject assignment and the publish lock.
+router.post('/marks', authRequired, requireRole(...ADMIN), m.upsertMarks);
 
 // Library
 crud('/books', m.books, { read: ALL });

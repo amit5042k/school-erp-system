@@ -57,6 +57,11 @@ exports.listMarks = (req, res) => {
   if (exam_id) { wheres.push('m.exam_id = ?'); params.push(exam_id); }
   if (student_id) { wheres.push('m.student_id = ?'); params.push(student_id); }
   if (class_id) { wheres.push('s.class_id = ?'); params.push(class_id); }
+  // Students and parents see only published, unblocked results.
+  if (!isStaff(req.user)) {
+    wheres.push('EXISTS (SELECT 1 FROM exam_publish p WHERE p.exam_id = m.exam_id AND p.class_id = s.class_id AND p.marks_published = 1)');
+    wheres.push('NOT EXISTS (SELECT 1 FROM exam_result_blocks b WHERE b.student_id = m.student_id AND b.exam_id IN (0, m.exam_id))');
+  }
   const where = wheres.length ? 'WHERE ' + wheres.join(' AND ') : '';
   const rows = db.prepare(`
     SELECT m.*, s.full_name AS student_name, s.admission_no, e.name AS exam_name
