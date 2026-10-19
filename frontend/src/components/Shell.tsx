@@ -83,6 +83,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [showNav, setShowNav] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [session, setSession] = useState<string>('');
+  const [notif, setNotif] = useState<{ total: number; items: { key: string; label: string; count: number; href: string; tone: string }[] }>({ total: 0, items: [] });
   const [menuOpen, setMenuOpen] = useState<'user' | 'notif' | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +92,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     if (!u || !getToken()) { clearSession(); router.replace('/login'); return; }
     if (u.mustChangePassword && pathname !== '/change-password') { router.replace('/change-password?required=1'); return; }
     api<{ academic_year?: string }>('/settings').then(s => setSession(s?.academic_year || '')).catch(() => {});
+    if (!u.mustChangePassword) api<any>('/notifications/summary').then(setNotif).catch(() => {});
     setUserState(u);
   }, [router, pathname]);
 
@@ -214,20 +216,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 title="Notifications"
               >
                 🔔
-                <span className="absolute -top-1 -right-1 bg-accent-500 text-white text-[10px] px-1 rounded-full">35</span>
+                {notif.total > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-accent-500 text-white text-[10px] px-1 rounded-full">{notif.total > 99 ? '99+' : notif.total}</span>
+                )}
               </button>
               {menuOpen === 'notif' && (
                 <div className="absolute right-0 mt-2 w-64 bg-white text-gray-700 rounded shadow-lg border text-sm z-50">
                   <div className="px-3 py-2 border-b bg-brand-50 font-semibold text-brand-700">Notifications</div>
-                  <Link href="/leaves" className="flex justify-between px-3 py-2 hover:bg-brand-50 border-b">
-                    <span>Leave Requests</span><span className="badge badge-amber">25</span>
-                  </Link>
-                  <Link href="/birthdays" className="flex justify-between px-3 py-2 hover:bg-brand-50 border-b">
-                    <span>Birthdays Today</span><span className="badge badge-green">7</span>
-                  </Link>
-                  <Link href="/incidents" className="flex justify-between px-3 py-2 hover:bg-brand-50">
-                    <span>Incidents</span><span className="badge badge-red">3</span>
-                  </Link>
+                  {notif.items.map(i => (
+                    <Link key={i.key} href={i.href} onClick={() => setMenuOpen(null)} className="flex justify-between px-3 py-2 hover:bg-brand-50 border-b last:border-b-0">
+                      <span>{i.label}</span><span className={`badge ${i.count ? `badge-${i.tone}` : 'badge-gray'}`}>{i.count}</span>
+                    </Link>
+                  ))}
+                  {!notif.items.length && <div className="px-3 py-2 text-gray-500">Nothing new.</div>}
                 </div>
               )}
             </div>

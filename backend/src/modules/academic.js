@@ -205,7 +205,7 @@ function periodTimes(req, res) {
 }
 
 registerReport({
-  key: 'promotion-history', title: 'Promotion History', group: 'Students',
+  key: 'promotion-history', title: 'Promotion History', group: 'Student',
   params: [
     { name: 'to_session', label: 'Promoted Into Session', type: 'session' },
     { name: 'class_id', label: 'From Class', type: 'class' },

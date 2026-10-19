@@ -1,7 +1,7 @@
 // Lookups and features used by several areas: shared master lists and sending login credentials.
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { db, ROLES, auth, role, registerMaster, registerReport, messaging } = require('./_kit');
+const { db, ROLES, auth, role, registerMaster, registerReport, messaging, today } = require('./_kit');
 
 registerMaster({
   type: 'subjects', title: 'Subjects', group: 'Examination', read: ROLES.ALL,
@@ -121,7 +121,27 @@ registerReport({
     FROM users u WHERE (? = '' OR u.role = ?) ORDER BY u.role, u.full_name`).all(p.user_role, p.user_role),
 });
 
+// Live counts for the header bell, filtered to what each role may act on.
+function notifications(req, res) {
+  const md = today().slice(5);
+  const bdays = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM students WHERE substr(dob, 6, 5) = ? AND COALESCE(status, 'active') = 'active')
+         + (SELECT COUNT(*) FROM teachers WHERE substr(dob, 6, 5) = ? AND COALESCE(status, 'active') = 'active') AS c`).get(md, md).c;
+  const items = [{ key: 'birthdays', label: 'Birthdays Today', count: bdays, href: '/birthdays', tone: 'green' }];
+  if (req.user.role === 'admin') {
+    items.unshift({ key: 'leaves', label: 'Leave Requests', href: '/leaves', tone: 'amber',
+      count: db.prepare("SELECT COUNT(*) AS c FROM staff_leaves WHERE status = 'pending'").get().c });
+    items.push({ key: 'incidents', label: 'Open Incidents', href: '/incidents', tone: 'red',
+      count: db.prepare("SELECT COUNT(*) AS c FROM incidents WHERE status = 'open'").get().c });
+  } else if (req.user.role === 'teacher') {
+    items.unshift({ key: 'leaves', label: 'My Pending Leaves', href: '/leaves', tone: 'amber',
+      count: db.prepare("SELECT COUNT(*) AS c FROM staff_leaves WHERE status = 'pending' AND teacher_id = ?").get(req.user.linked_id ?? -1).c });
+  }
+  res.json({ total: items.reduce((a, i) => a + i.count, 0), items });
+}
+
 function register(router) {
+  router.get('/notifications/summary', auth, notifications);
   router.post('/admin/send-credentials', auth, role(...ROLES.ADMIN), sendCredentials);
 }
 
