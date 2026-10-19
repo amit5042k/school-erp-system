@@ -293,6 +293,10 @@ const LEAVE_TYPES = [
   'On Duty',
 ];
 exports.LEAVE_TYPES = LEAVE_TYPES;
+// Leave types come from the editable "Leave Types" list; the built-in names are the fallback.
+const { masterNames } = require('../utils/masters');
+const leaveTypes = () => { const m = masterNames('leave-types'); return m.length ? m : LEAVE_TYPES; };
+exports.leaveTypes = leaveTypes;
 
 const leaveCrud = makeCrud({
   table: 'staff_leaves',
@@ -304,7 +308,7 @@ const leaveCrud = makeCrud({
                 t.department AS department, t.phone AS phone, t.photo_url AS photo_url`,
   validate: (d) => {
     if (!d.teacher_id) return 'teacher_id is required';
-    if (!LEAVE_TYPES.includes(d.leave_type)) return `leave_type must be one of: ${LEAVE_TYPES.join(', ')}`;
+    if (!leaveTypes().includes(d.leave_type)) return `leave_type must be one of: ${leaveTypes().join(', ')}`;
     if (!isDate(d.from_date) || !isDate(d.to_date)) return 'from_date and to_date must be YYYY-MM-DD';
     return dateOrder(d.from_date, d.to_date, 'leave') || badUrl(d.attachment, 'attachment');
   },
@@ -381,7 +385,7 @@ exports.leaveBalance = (req, res) => {
     const to = r.approved_to || r.to_date;
     availedMap[r.leave_type] = (availedMap[r.leave_type] || 0) + daysInclusive(from, to);
   }
-  const rows = LEAVE_TYPES.map(t => {
+  const rows = leaveTypes().map(t => {
     const allowed = allowedMap[t] || 0;
     const availed = availedMap[t] || 0;
     const extra = Math.max(0, availed - allowed);
@@ -433,7 +437,7 @@ exports.leaveAllowances = {
   upsert(req, res) {
     const { teacher_id, session, leave_type, allowed } = req.body;
     if (!teacher_id || !session || !leave_type) return res.status(400).json({ error: 'teacher_id, session, leave_type required' });
-    if (!LEAVE_TYPES.includes(leave_type)) return res.status(400).json({ error: 'Unknown leave_type' });
+    if (!leaveTypes().includes(leave_type)) return res.status(400).json({ error: 'Unknown leave_type' });
     if (!(num(allowed ?? 0) >= 0)) return res.status(400).json({ error: 'allowed must be 0 or more' });
     try { db.prepare(`
       INSERT INTO leave_allowances (teacher_id, session, leave_type, allowed) VALUES (?, ?, ?, ?)

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api, getUser, localDate } from '@/lib/api';
+import FileUpload, { FileLinks } from '@/components/FileUpload';
+import { api, fileUrl, getUser, localDate } from '@/lib/api';
 
 const LEAVE_TYPES = [
   'Casual Leave',
@@ -47,7 +48,32 @@ export default function LeavesPage() {
   const [rows, setRows] = useState<Leave[]>([]);
   const [balances, setBalances] = useState<Record<number, BalanceRow[]>>({});
   const [err, setErr] = useState<string | null>(null);
-  const [filters, setFilters] = useState({ status: 'Pending', type: '', from: '', to: '' });
+  const [filters, setFilters] = useState({ status: isAdmin ? 'Pending' : '', type: '', from: '', to: '' });
+  const blankApply = { teacher_id: '', leave_type: LEAVE_TYPES[0], from_date: localDate(), to_date: localDate(), reason: '', attachment: '' };
+  const [applying, setApplying] = useState(!isAdmin);
+  const [apply, setApply] = useState(blankApply);
+  const [staff, setStaff] = useState<{ id: number; employee_no: string; full_name: string }[]>([]);
+  const [ok, setOk] = useState<string | null>(null);
+  useEffect(() => { if (isAdmin) api<any[]>('/teachers').then(setStaff).catch(() => {}); }, [isAdmin]);
+
+  async function submitLeave(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null); setOk(null);
+    if (apply.to_date < apply.from_date) return setErr('To date cannot be before From date.');
+    try {
+      const body: Record<string, string> = { ...apply };
+      if (!isAdmin) delete body.teacher_id;
+      await api('/leaves', { method: 'POST', body: JSON.stringify(body) });
+      setApply({ ...blankApply, teacher_id: apply.teacher_id });
+      setOk('Leave application submitted.');
+      load();
+    } catch (e: any) { setErr(e.message); }
+  }
+
+  async function withdraw(id: number) {
+    if (!confirm('Withdraw this leave application?')) return;
+    try { await api(`/leaves/${id}`, { method: 'DELETE' }); load(); } catch (e: any) { setErr(e.message); }
+  }
   const [editing, setEditing] = useState<Record<number, { approved_from: string; approved_to: string; remarks: string }>>({});
 
   async function load() {
@@ -114,10 +140,40 @@ export default function LeavesPage() {
   return (
     <Shell>
       {/* Breadcrumb + title */}
-      <div className="text-xs text-gray-500 mb-1">Leave Management &nbsp;›&nbsp; Approve/Reject Leaves</div>
-      <h2 className="text-xl font-bold text-brand-700 mb-1">Approve/Reject Leave</h2>
-      <div className="text-sm text-gray-500 mb-4">Staff Leaves Report</div>
+      <div className="text-xs text-gray-500 mb-1">Leave Management &nbsp;›&nbsp; {isAdmin ? 'Approve/Reject Leaves' : 'My Leaves'}</div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+        <div>
+          <h2 className="text-xl font-bold text-brand-700 mb-1">{isAdmin ? 'Approve/Reject Leave' : 'My Leave Applications'}</h2>
+          <div className="text-sm text-gray-500">Staff Leaves Report</div>
+        </div>
+        <button className="btn btn-primary text-sm" onClick={() => setApplying(v => !v)}>{applying ? 'Close Form' : 'Apply for Leave'}</button>
+      </div>
       {err && <div className="text-red-700 text-sm mb-2">{err}</div>}
+      {ok && <div className="text-green-700 text-sm mb-2">{ok}</div>}
+
+      {applying && (
+        <form onSubmit={submitLeave} className="card p-4 mb-4 grid md:grid-cols-4 gap-3 text-sm">
+          <h3 className="md:col-span-4 font-semibold text-brand-700">Apply for Leave{isAdmin && ' (on behalf of staff)'}</h3>
+          {isAdmin && (
+            <div><label className="label">Staff *</label>
+              <select className="input" required value={apply.teacher_id} onChange={e => setApply({ ...apply, teacher_id: e.target.value })}>
+                <option value="">-- Select --</option>{staff.map(t => <option key={t.id} value={t.id}>{t.employee_no} — {t.full_name}</option>)}
+              </select></div>
+          )}
+          <div><label className="label">Leave Type *</label>
+            <select className="input" value={apply.leave_type} onChange={e => setApply({ ...apply, leave_type: e.target.value })}>
+              {LEAVE_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select></div>
+          <div><label className="label">From *</label><input type="date" className="input" required value={apply.from_date} onChange={e => setApply({ ...apply, from_date: e.target.value, to_date: apply.to_date < e.target.value ? e.target.value : apply.to_date })} /></div>
+          <div><label className="label">To *</label><input type="date" className="input" required min={apply.from_date} value={apply.to_date} onChange={e => setApply({ ...apply, to_date: e.target.value })} /></div>
+          <div className="md:col-span-2"><label className="label">Reason *</label><input className="input" required value={apply.reason} onChange={e => setApply({ ...apply, reason: e.target.value })} /></div>
+          <div>
+            <FileUpload label="Attachment (e.g. medical certificate)" accept=".pdf,.jpg,.jpeg,.png" onUploaded={f => setApply(a => ({ ...a, attachment: f[0].url }))} />
+            {apply.attachment && <div className="text-xs mt-1"><FileLinks value={apply.attachment} names="Attached file" /> <button type="button" className="text-red-600 ml-2" onClick={() => setApply({ ...apply, attachment: '' })}>Remove</button></div>}
+          </div>
+          <div className="flex items-end"><button className="btn btn-primary">Submit Application</button></div>
+        </form>
+      )}
 
       {/* Filters */}
       <div className="card p-4 mb-4 grid md:grid-cols-5 gap-3 text-sm">
@@ -208,7 +264,7 @@ export default function LeavesPage() {
                     <dt className="text-gray-500">From</dt><dd className="col-span-2">{leave.from_date}</dd>
                     <dt className="text-gray-500">To</dt><dd className="col-span-2">{leave.to_date}</dd>
                     <dt className="text-gray-500">Reason</dt><dd className="col-span-2">{leave.reason || '—'}</dd>
-                    <dt className="text-gray-500">Attachment</dt><dd className="col-span-2">{leave.attachment ? <a href={leave.attachment} target="_blank" rel="noreferrer" className="text-brand-600 underline">View</a> : '—'}</dd>
+                    <dt className="text-gray-500">Attachment</dt><dd className="col-span-2">{leave.attachment ? <a href={fileUrl(leave.attachment)} target="_blank" rel="noreferrer" className="text-brand-600 underline">View</a> : '—'}</dd>
                     <dt className="text-gray-500">Applied On</dt><dd className="col-span-2">{leave.applied_on?.slice(0, 10)}</dd>
                   </dl>
                 </div>
@@ -217,7 +273,10 @@ export default function LeavesPage() {
                 <div className="p-3">
                   <div className="font-semibold mb-2 text-brand-700">Decision</div>
                   {leave.status === 'pending' && !isAdmin ? (
-                    <div className="text-xs text-gray-500">Awaiting a decision from the admin.</div>
+                    <div className="text-xs text-gray-500">
+                      Awaiting a decision from the admin.
+                      <button className="block mt-2 text-red-600 hover:underline" onClick={() => withdraw(leave.id)}>Withdraw application</button>
+                    </div>
                   ) : leave.status === 'pending' ? (
                     <div className="space-y-2">
                       <div className="grid grid-cols-2 gap-2">

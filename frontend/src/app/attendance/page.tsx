@@ -52,18 +52,18 @@ export default function AttendancePage() {
           { title: 'Student Attendance', actions: [
             { label: 'Manage Student Attendance', onClick: () => setMarking(true) },
             { label: 'Manage Student Leave Requests', href: '/leaves' },
-            { label: 'Student Attendance Report' },
-            { label: 'Gender Wise Student Details' },
+            { label: 'Student Attendance Report', href: '/report/student-attendance' },
+            { label: 'Gender Wise Student Details', href: '/report/gender-wise-students' },
           ]},
           { title: 'Staff Attendance', actions: [
-            { label: 'Add Staff Attendance' },
-            { label: 'Staff Attendance Report' },
-            { label: 'Biometric Attendance Report' },
-            { label: 'Staff Leaves Report' },
+            { label: 'Add Staff Attendance', href: '/hr/staff-attendance' },
+            { label: 'Staff Attendance Report', href: '/report/staff-attendance' },
+            { label: 'Biometric Attendance Report', href: '/report/biometric-attendance' },
+            { label: 'Staff Leaves Report', href: '/report/staff-leaves' },
           ]},
           { title: 'Transport', actions: [
-            { label: 'Bus Attendance Report' },
-            { label: 'Student Activate/Deactivate Report' },
+            { label: 'Bus Attendance Report', href: '/report/bus-attendance' },
+            { label: 'Student Activate/Deactivate Report', href: '/report/student-status' },
           ]},
         ]}
       />
