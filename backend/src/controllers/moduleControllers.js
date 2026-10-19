@@ -629,9 +629,17 @@ exports.activities = makeCrud({
 });
 
 const PROSPECTUS_START = process.env.PROSPECTUS_START || 'UE/26-27/207';
+// Settings saved on Student Prospectus Settings (stu_settings, created by the students module).
+function prospectusSettings() {
+  try { return Object.fromEntries(db.prepare('SELECT key, value FROM stu_settings').all().map(r => [r.key, r.value])); }
+  catch { return {}; }
+}
 function nextProspectusNo() {
-  const last = db.prepare('SELECT prospectus_no FROM prospectus ORDER BY id DESC LIMIT 1').get()?.prospectus_no;
-  if (!last) return PROSPECTUS_START;
+  const start = prospectusSettings().prospectus_start || PROSPECTUS_START;
+  // Continue the series that matches the configured prefix, so changing the prefix (e.g. a new session) starts afresh.
+  const prefix = (start.match(/^(.*?)(\d+)$/) || [null, start])[1];
+  const last = db.prepare("SELECT prospectus_no FROM prospectus WHERE prospectus_no LIKE ? || '%' ORDER BY id DESC LIMIT 1").get(prefix)?.prospectus_no;
+  if (!last) return start;
   const m = last.match(/^(.*?)(\d+)$/);
   return m ? m[1] + String(Number(m[2]) + 1).padStart(m[2].length, '0') : `${last}-1`;
 }
@@ -656,6 +664,7 @@ exports.prospectus = {
   create(req, res) {
     // Number and total are assigned here so two desks saving at once can't collide or mis-total.
     req.body.prospectus_no = nextProspectusNo();
+    if (req.body.prospectus_amount == null || req.body.prospectus_amount === '') req.body.prospectus_amount = num(prospectusSettings().prospectus_fee || 0) || 0;
     req.body.total_amount = num(req.body.prospectus_amount || 0) + num(req.body.bank_charges || 0);
     return prospectusCrud.create(req, res);
   },

@@ -54,6 +54,7 @@ const NAV: NavItem[] = [
   { label: 'Hostel',                href: '/hostel',                icon: '🏨' },
   { label: 'Payroll Management',    href: '/payroll',               icon: '💰', roles: ['admin', 'teacher'] },
   { label: 'Inventory',             href: '/inventory',             icon: '📦', roles: ADMIN },
+  { label: 'Item Requests',         href: '/inventory/requests',    icon: '📦', roles: ['teacher'] },
   { label: 'Users & Roles',         href: '/users',                 icon: '🔐', roles: ADMIN },
   { label: 'Backups',               href: '/backups',               icon: '💾', roles: ADMIN },
   { label: 'Reports',               href: '/reports',               icon: '📊' },

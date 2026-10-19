@@ -75,14 +75,15 @@ export default function TransportPage() {
             { label: 'Assign Student Transport', onClick: () => setTab('students') },
           ]},
           { title: 'Reports', actions: [
-            { label: 'Transport Report' },
-            { label: 'Bus Occupancy Report' },
-            { label: 'Bus Attendance Report' },
+            { label: 'Transport Report', href: '/report/transport-students' },
+            { label: 'Bus Occupancy Report', href: '/report/bus-occupancy' },
+            { label: 'Mark Bus Attendance', href: '/transport/bus-attendance' },
+            { label: 'Bus Attendance Report', href: '/report/bus-attendance' },
             { label: 'Pending Transport Fee Report', href: '/fees' },
           ]},
           { title: 'Communication', actions: [
             { label: 'Transport Communication', href: '/communications' },
-            { label: 'Student Activate/Deactivate Report' },
+            { label: 'Student Activate/Deactivate Report', href: '/report/student-status' },
           ]},
         ]}
       />

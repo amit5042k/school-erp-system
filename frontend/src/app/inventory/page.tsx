@@ -10,10 +10,17 @@ export default function InventoryPage() {
   const [items, setItems] = useState<any[]>([]);
   const [mv, setMv] = useState<any[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [cats, setCats] = useState<{ id: number; name: string }[]>([]);
+  const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    api<any[]>('/masters/item-categories').then(setCats).catch(() => {});
+    api<any[]>('/inv/stores').then(r => setStores(r.filter(x => x.active))).catch(() => {});
+  }, []);
 
   async function load() {
     try {
-      setItems(await api('/inventory/items'));
+      setItems(await api('/inv/items'));
       setMv(await api('/inventory/movements'));
     } catch (e: any) { setErr(e.message); }
   }
@@ -23,12 +30,13 @@ export default function InventoryPage() {
     e.preventDefault();
     const f = e.target as any;
     try {
-      await api('/inventory/items', { method: 'POST', body: JSON.stringify({
+      const created = await api<{ id: number }>('/inventory/items', { method: 'POST', body: JSON.stringify({
         sku: f.sku.value, name: f.name.value, category: f.category.value,
         unit: f.unit.value, qty_on_hand: Number(f.qty_on_hand.value) || 0,
         reorder_level: Number(f.reorder_level.value) || 0, unit_price: Number(f.unit_price.value) || 0,
       }) });
-      f.reset(); load();
+      if (f.store_id.value) await api(`/inv/items/${created.id}/store`, { method: 'PUT', body: JSON.stringify({ store_id: Number(f.store_id.value) }) });
+      f.reset(); setErr(null); load();
     } catch (e: any) { setErr(e.message); }
   }
   async function move(e: React.FormEvent) {
@@ -53,21 +61,23 @@ export default function InventoryPage() {
         columns={3}
         groups={[
           { title: 'Stores', actions: [
-            { label: 'Store Categories' },
-            { label: 'Store Type' },
-            { label: 'Store' },
-            { label: 'Manage Departments' },
+            { label: 'Store Categories', href: '/masters/store-categories' },
+            { label: 'Store Type', href: '/masters/store-types' },
+            { label: 'Store', href: '/inventory/stores' },
+            { label: 'Manage Departments', href: '/masters/departments' },
           ]},
           { title: 'Items & Stock', actions: [
-            { label: 'Item Category' },
+            { label: 'Item Category', href: '/masters/item-categories' },
             { label: 'Store Items', onClick: () => setTab('items') },
             { label: 'Add New Stock', onClick: () => setTab('movements') },
             { label: 'New Stock Details', onClick: () => setTab('movements') },
             { label: 'Stock Report', onClick: () => setTab('items') },
           ]},
           { title: 'Allocation', actions: [
-            { label: 'Allocate to Staff' },
-            { label: 'Staff Requests' },
+            { label: 'Allocate to Staff', href: '/inventory/allocations' },
+            { label: 'Staff Requests', href: '/inventory/requests' },
+            { label: 'Staff Allocation Report', href: '/report/inventory-allocations' },
+            { label: 'Staff Requests Report', href: '/report/inventory-requests' },
           ]},
         ]}
       />
@@ -89,7 +99,10 @@ export default function InventoryPage() {
               <form onSubmit={addItem} className="card p-4 mb-4 grid md:grid-cols-4 gap-3 text-sm">
                 <div><label className="label">SKU *</label><input className="input" name="sku" required /></div>
                 <div><label className="label">Name *</label><input className="input" name="name" required /></div>
-                <div><label className="label">Category</label><input className="input" name="category" /></div>
+                <div><label className="label">Category</label>
+                  <select className="input" name="category"><option value="">—</option>{cats.map(c => <option key={c.id}>{c.name}</option>)}</select></div>
+                <div><label className="label">Store</label>
+                  <select className="input" name="store_id"><option value="">—</option>{stores.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}</select></div>
                 <div><label className="label">Unit</label><input className="input" name="unit" placeholder="pcs/kg/ltr" /></div>
                 <div><label className="label">Qty on hand</label><input className="input" name="qty_on_hand" type="number" /></div>
                 <div><label className="label">Reorder level</label><input className="input" name="reorder_level" type="number" /></div>
@@ -97,13 +110,13 @@ export default function InventoryPage() {
                 <div className="md:col-span-4"><button className="btn btn-primary">Add Item</button></div>
               </form>
               <div className="card p-4 overflow-x-auto">
-                <table className="table"><thead><tr><th>SKU</th><th>Name</th><th>Cat</th><th>Unit</th><th>Qty</th><th>Reorder</th><th>Price</th></tr></thead>
+                <table className="table"><thead><tr><th>SKU</th><th>Name</th><th>Cat</th><th>Store</th><th>Unit</th><th>Qty</th><th>Reorder</th><th>Price</th></tr></thead>
                   <tbody>{items.map(i => (
-                    <tr key={i.id}><td>{i.sku}</td><td>{i.name}</td><td>{i.category}</td><td>{i.unit}</td>
+                    <tr key={i.id}><td>{i.sku}</td><td>{i.name}</td><td>{i.category}</td><td>{i.store_name || '—'}</td><td>{i.unit}</td>
                       <td><span className={`badge ${i.qty_on_hand <= i.reorder_level ? 'badge-red' : 'badge-green'}`}>{i.qty_on_hand}</span></td>
                       <td>{i.reorder_level}</td><td>₹{i.unit_price}</td></tr>
                   ))}
-                    {!items.length && <tr><td colSpan={7} className="text-center py-3 text-gray-500">No items.</td></tr>}
+                    {!items.length && <tr><td colSpan={8} className="text-center py-3 text-gray-500">No items.</td></tr>}
                   </tbody></table>
               </div>
             </>
