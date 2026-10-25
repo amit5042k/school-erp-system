@@ -140,6 +140,28 @@ npm run dev
 - Sign-in is rate-limited on failed attempts (10 per account and 100 per network per 15 minutes).
 - Put the backend behind HTTPS; `helmet` and rate limiting are already wired.
 
+## Staff roles and permissions
+
+Staff logins have a role: Principal, Academic Coordinator, IT Head, Office Superintendent, Clerk, Accountant,
+Teacher or Non-Teaching Staff (add more on **Roles & Permissions**). Each role has *No access*, *Standard*
+(teacher-level) or *Full* (admin-level) for 14 areas. Everyone keeps their own leaves, payslips, timetable and
+notices. Only a Super Admin can create or change Super Admin accounts, and nobody can change their own role.
+The area map lives in `backend/src/utils/permissions.js` and its mirror `frontend/src/lib/permissions.ts`.
+
+## eSSL biometric devices (ADMS)
+
+Devices with ADMS / "Cloud Server" send punches to `http://<api-domain>/iclock/` in real time.
+On the device: Menu › Comm › Cloud Server › server address = API domain (or IP), port 80 or 8081, HTTPS off.
+Then approve the device in **Human Resource › Biometric Devices** and map staff on **Map Biometric IDs**
+(defaults to Employee No). Most ADMS firmware can't use HTTPS, so let nginx accept plain HTTP for `/iclock/` only
+(sample config on the Biometric Devices page).
+
+## Android app
+
+`mobile/` is a Capacitor app that opens the ERP website with push notifications. Set `ERP_URL` and `API_URL`
+(repo variables) and run the **Android app** GitHub workflow to get an APK; see `mobile/README.md` for Firebase
+(`google-services.json`, `FCM_SERVICE_ACCOUNT_FILE`), signing and Play Store steps.
+
 ## How the code is organised
 
 - `backend/src/modules/*.js` — one file per feature area, loaded automatically. Each creates its own tables and
