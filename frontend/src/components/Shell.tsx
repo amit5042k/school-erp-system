@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { api, clearSession, getStoredUser, getToken, setUser } from '@/lib/api';
-import { canSeePage, type Perms } from '@/lib/permissions';
+import { levelFor, type Perms } from '@/lib/permissions';
+import NativeBridge, { unregisterPush } from '@/components/NativeBridge';
 
 /**
  * Sidebar configuration.
@@ -18,7 +19,9 @@ const ALL: Role[] = ['admin', 'teacher', 'student', 'parent'];
 const ADMIN: Role[] = ['admin'];
 
 const NAV: NavItem[] = [
+  { label: 'Home',                  href: '/home',                  icon: '⌂', roles: ALL },
   { label: 'Dashboard',             href: '/dashboard',             icon: '▦', roles: ALL },
+  { label: 'Notifications',         href: '/notifications',         icon: '🔔', roles: ALL },
   { label: 'Student',               href: '/students',              icon: '👤' },
   { label: 'Academic Communication',href: '/homework',              icon: '📚', roles: ALL },
   { label: 'Announcements',         href: '/announcements',         icon: '📣', roles: ALL },
@@ -66,8 +69,14 @@ const NAV: NavItem[] = [
 function navFor(role: Role, perms?: Perms | null): NavItem[] {
   // Staff roles (principal, accountant, ...) see what their role's areas allow; others go by the item's roles.
   const can = (i: NavItem, inherited?: Role[]) => {
-    if (perms && role === 'teacher') return i.href ? canSeePage(perms, i.href) : true;
-    return (i.roles || inherited || ['admin', 'teacher']).includes(role);
+    const allowed = i.roles || inherited || ['admin', 'teacher'];
+    if (perms && role === 'teacher') {
+      if (!i.href) return true;
+      // Full acts as admin; Standard acts as teacher, so only show pages a teacher can use.
+      const level = levelFor(perms, i.href);
+      return level === 'full' || (level === 'standard' && allowed.includes('teacher'));
+    }
+    return allowed.includes(role);
   };
   return NAV.flatMap(item => {
     if (!item.children) return can(item) ? [item] : [];
@@ -125,12 +134,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('click', onDoc);
   }, []);
 
-  function logout() { clearSession(); router.replace('/login'); }
+  async function logout() { await unregisterPush().catch(() => {}); clearSession(); router.replace('/login'); }
 
   if (!user) return <div className="min-h-screen grid place-items-center text-gray-500">Loading…</div>;
 
   return (
     <div id="wrapper" className={showNav ? 'show-nav' : ''}>
+      <NativeBridge />
       <aside id="nav">
         <div className="bg-brand-700 text-white px-4 py-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white text-brand-700 grid place-items-center font-bold">SE</div>
