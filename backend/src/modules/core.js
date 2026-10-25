@@ -203,6 +203,7 @@ function register(router) {
   router.delete('/masters/:type/:id', auth, safe(masters.remove));
 
   router.get('/admin/backups', auth, role(...ROLES.ADMIN), (req, res) => res.json(backup.listBackups()));
+  router.get('/admin/backups/offsite', auth, role(...ROLES.ADMIN), (req, res) => res.json(backup.offsiteStatus()));
   router.get('/admin/backup/download', auth, role(...ROLES.ADMIN), downloadBackup);
 
   router.get('/messaging/status', auth, role(...ROLES.STAFF), (req, res) => res.json(messaging.status()));

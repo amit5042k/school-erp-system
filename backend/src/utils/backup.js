@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../config/db');
+const s3 = require('./s3');
 
 const dir = process.env.BACKUP_DIR || path.join(__dirname, '..', '..', 'data', 'backups');
 const keep = Number(process.env.BACKUP_KEEP || 14);
@@ -17,7 +18,29 @@ async function backupNow() {
   await db.backup(file);
   const old = fs.readdirSync(dir).filter(f => /^school-\d{8}-\d{6}\.sqlite$/.test(f)).sort().reverse().slice(keep);
   for (const f of old) fs.unlinkSync(path.join(dir, f));
+  await uploadOffsite(file);
   return file;
+}
+
+// Off-site copy (S3-compatible). Failures are recorded, never thrown, so the local backup always succeeds.
+const statusFile = () => path.join(dir, 'offsite-status.json');
+function offsiteStatus() {
+  const configured = !!s3.config();
+  try { return { configured, ...JSON.parse(fs.readFileSync(statusFile(), 'utf8')) }; } catch { return { configured }; }
+}
+async function uploadOffsite(file) {
+  if (!s3.config()) return null;
+  const state = offsiteStatus();
+  try {
+    const where = await s3.putObject(path.basename(file), fs.readFileSync(file), 'application/x-sqlite3');
+    Object.assign(state, { last_ok_at: new Date().toISOString(), last_ok_file: where, last_error: null });
+  } catch (e) {
+    Object.assign(state, { last_error: String(e.message || e).slice(0, 300), last_error_at: new Date().toISOString() });
+    console.error('Off-site backup failed:', state.last_error);
+  }
+  delete state.configured;
+  fs.writeFileSync(statusFile(), JSON.stringify(state));
+  return state;
 }
 
 function listBackups() {
@@ -33,4 +56,4 @@ function schedule() {
   setInterval(run, 24 * 60 * 60 * 1000).unref();
 }
 
-module.exports = { backupNow, listBackups, schedule, dir };
+module.exports = { backupNow, listBackups, schedule, dir, offsiteStatus };

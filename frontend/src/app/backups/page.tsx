@@ -12,7 +12,11 @@ export default function BackupsPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = () => api<Backup[]>('/admin/backups').then(setRows).catch(e => setErr(e.message));
+  const [offsite, setOffsite] = useState<{ configured: boolean; last_ok_at?: string; last_ok_file?: string; last_error?: string | null; last_error_at?: string } | null>(null);
+  const load = () => {
+    api<Backup[]>('/admin/backups').then(setRows).catch(e => setErr(e.message));
+    api<any>('/admin/backups/offsite').then(setOffsite).catch(() => {});
+  };
   useEffect(() => { load(); }, []);
 
   async function download() {
@@ -38,6 +42,20 @@ export default function BackupsPage() {
         Download one regularly and keep it somewhere else too (e.g. Google Drive), so data survives if the server is lost.
       </p>
       {err && <div className="text-red-700 text-sm mb-3">{err}</div>}
+      {offsite && (
+        <div className={`card p-4 mb-4 text-sm border-l-4 ${!offsite.configured ? 'border-amber-500' : offsite.last_error ? 'border-red-500' : 'border-green-500'}`}>
+          <div className="font-semibold text-brand-700 mb-1">Off-site copy</div>
+          {!offsite.configured ? (
+            <div className="text-gray-600">Not set up. Backups stay on this server only. Add your S3-compatible storage (AWS S3, Cloudflare R2, Backblaze B2, Wasabi)
+              to <code>backend/.env</code> as <code>BACKUP_S3_ENDPOINT</code>, <code>BACKUP_S3_BUCKET</code>, <code>BACKUP_S3_ACCESS_KEY</code>, <code>BACKUP_S3_SECRET_KEY</code> and restart; every backup is then copied there.</div>
+          ) : (
+            <div className="space-y-1">
+              {offsite.last_ok_at ? <div className="text-green-700">Last copied {fmtDateTime(offsite.last_ok_at)} → <span className="font-mono text-xs">{offsite.last_ok_file}</span></div> : <div className="text-gray-600">Set up; the next backup will be copied.</div>}
+              {offsite.last_error && <div className="text-red-700">Last attempt failed {fmtDateTime(offsite.last_error_at)}: {offsite.last_error}</div>}
+            </div>
+          )}
+        </div>
+      )}
       <button className="btn btn-primary mb-4" onClick={download} disabled={busy}>{busy ? 'Preparing…' : 'Back up now & download'}</button>
       <div className="card p-4 overflow-x-auto">
         <h3 className="font-semibold text-brand-700 mb-2">Backups stored on the server</h3>
