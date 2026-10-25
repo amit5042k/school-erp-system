@@ -31,6 +31,38 @@ export async function unregisterPush() {
 /** True when running inside the Android app. */
 export const isNativeApp = () => !!cap();
 
+// MainActivity exposes window.SchoolERPNative because the web view can't print or save blob downloads.
+type NativeFiles = { print: (name: string) => void; saveFile: (name: string, base64: string, mime: string) => void };
+const nativeFiles = (): NativeFiles | null => (typeof window !== 'undefined' ? (window as any).SchoolERPNative || null : null);
+
+async function saveNatively(nf: NativeFiles, href: string, name: string) {
+  const blob = await (await fetch(href)).blob();
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+  nf.saveFile(name || 'download', base64, blob.type || 'application/octet-stream');
+}
+
+/** Route window.print() and blob/data downloads to the app; returns an undo function. */
+function patchFilesAndPrint(): () => void {
+  const nf = nativeFiles();
+  if (!nf) return () => {};
+  const origPrint = window.print;
+  window.print = () => nf.print(document.title);
+  const origClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+    if (this.hasAttribute('download') && /^(blob|data):/.test(this.href)) {
+      saveNatively(nf, this.href, this.download).catch(() => origClick.call(this));
+      return;
+    }
+    return origClick.call(this);
+  };
+  return () => { window.print = origPrint; HTMLAnchorElement.prototype.click = origClick; };
+}
+
 export default function NativeBridge() {
   const router = useRouter();
 
@@ -38,7 +70,7 @@ export default function NativeBridge() {
     const c = cap();
     if (!c) return;
     const { App, Browser, PushNotifications } = c.Plugins;
-    const cleanups: (() => void)[] = [];
+    const cleanups: (() => void)[] = [patchFilesAndPrint()];
     const listen = async (plugin: any, event: string, fn: (e: any) => void) => {
       if (!plugin?.addListener) return;
       const h = await plugin.addListener(event, fn);
