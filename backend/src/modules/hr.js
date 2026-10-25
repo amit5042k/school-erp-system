@@ -1022,4 +1022,5 @@ function register(router) {
   router.post('/public/photo-upload/:token', publicLimit, memoryUpload('photo', ['.jpg', '.jpeg', '.png', '.webp'], 3), safe(photoUpload));
 }
 
-module.exports = { register };
+// recompute is reused by the live biometric (ADMS) integration so punches follow the same attendance rules.
+module.exports = { register, recompute };

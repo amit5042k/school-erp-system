@@ -59,6 +59,9 @@ export default function AttendancePage() {
             { label: 'Add Staff Attendance', href: '/hr/staff-attendance' },
             { label: 'Staff Attendance Report', href: '/report/staff-attendance' },
             { label: 'Biometric Attendance Report', href: '/report/biometric-attendance' },
+            { label: 'Biometric Devices', href: '/hr/biometric-devices' },
+            { label: 'Live Punches', href: '/hr/biometric-live' },
+            { label: 'Map Biometric IDs', href: '/hr/biometric-mapping' },
             { label: 'Staff Leaves Report', href: '/report/staff-leaves' },
           ]},
           { title: 'Transport', actions: [

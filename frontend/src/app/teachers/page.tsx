@@ -102,6 +102,9 @@ export default function TeachersPage() {
           { title: 'Attendance & Reports', actions: [
             { label: 'Add Staff Attendance', href: '/hr/staff-attendance' },
             { label: 'Staff Attendance Report', href: '/report/staff-attendance' },
+            { label: 'Biometric Devices', href: '/hr/biometric-devices' },
+            { label: 'Live Punches', href: '/hr/biometric-live' },
+            { label: 'Map Biometric IDs', href: '/hr/biometric-mapping' },
             { label: 'Import Biometric Punches', href: '/hr/biometric-import' },
             { label: 'Biometric Attendance Report', href: '/report/biometric-attendance' },
             { label: 'Biometric Attendance Report 2', href: '/report/biometric-attendance-2' },
