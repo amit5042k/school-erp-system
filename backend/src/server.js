@@ -18,6 +18,8 @@ app.set('trust proxy', 1);
 // Uploaded files are loaded by the frontend from another origin (api. subdomain), so allow cross-origin reads.
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000', credentials: true }));
+// Device endpoints (e.g. eSSL ADMS at /iclock) speak plain text and live outside /api.
+require('./modules').registerRootModules(app);
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
@@ -38,11 +40,21 @@ app.get('/api/health', (req, res) => res.json({ ok: true, service: 'school-erp-b
 // Activity log: every change (non-GET) request by a signed-in user.
 const auditDb = require('./config/db');
 const auditIns = auditDb.prepare('INSERT INTO audit_log (user_id, action, path, status, ip) VALUES (?, ?, ?, ?, ?)');
+const events = require('./utils/events');
 app.use('/api', (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'OPTIONS') {
+    // Keep the JSON reply so listeners (e.g. push notifications) know what was created.
+    const json = res.json.bind(res);
+    res.json = (body) => { res.locals.body = body; return json(body); };
     res.on('finish', () => {
-      if (req.user) {
-        try { auditIns.run(req.user.id, req.method, req.originalUrl.split('?')[0].slice(0, 200), res.statusCode, req.ip); } catch (_) { /* never block a request on logging */ }
+      if (!req.user) return;
+      const path = req.originalUrl.split('?')[0];
+      try { auditIns.run(req.user.id, req.method, path.slice(0, 200), res.statusCode, req.ip); } catch (_) { /* never block a request on logging */ }
+      if (res.statusCode < 400) {
+        setImmediate(() => {
+          try { events.emit('api:change', { method: req.method, path, body: req.body || {}, user: req.user, status: res.statusCode, result: res.locals.body }); }
+          catch (e) { console.error('event listener failed:', e.message); }
+        });
       }
     });
   }

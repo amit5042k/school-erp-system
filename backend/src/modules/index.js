@@ -20,4 +20,9 @@ function registerModules(router) {
   }
 }
 
-module.exports = { loadModules, registerModules };
+// Some integrations (e.g. biometric devices) must answer outside /api; modules may export registerRoot(app).
+function registerRootModules(app) {
+  for (const { mod } of loadModules()) if (typeof mod.registerRoot === 'function') mod.registerRoot(app);
+}
+
+module.exports = { loadModules, registerModules, registerRootModules };
