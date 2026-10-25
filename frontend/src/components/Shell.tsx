@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, clearSession, getStoredUser, getToken, setUser } from '@/lib/api';
 import { levelFor, type Perms } from '@/lib/permissions';
 import NativeBridge, { unregisterPush } from '@/components/NativeBridge';
+import ChildSwitcher from '@/components/ChildSwitcher';
 
 /**
  * Sidebar configuration.
@@ -61,6 +62,7 @@ const NAV: NavItem[] = [
   { label: 'Item Requests',         href: '/inventory/requests',    icon: '📦', roles: ['teacher'] },
   { label: 'Users & Roles',         href: '/users',                 icon: '🔐', roles: ADMIN },
   { label: 'Roles & Permissions',   href: '/roles',                 icon: '🛡', roles: ADMIN },
+  { label: 'Bulk Import',           href: '/imports',               icon: '⇪', roles: ADMIN },
   { label: 'Backups',               href: '/backups',               icon: '💾', roles: ADMIN },
   { label: 'Reports',               href: '/reports',               icon: '📊' },
 ];
@@ -221,6 +223,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <Link href="/announcements" className="opacity-90 hover:opacity-100">Circulars</Link>
               <Link href="/birthdays" className="opacity-90 hover:opacity-100">Birthdays</Link>
 
+              <ChildSwitcher />
               {session && ((user.baseRole || user.role) === 'admin' || user.perms?.administration === 'full' ? (
                 <Link href="/settings" className="bg-brand-600 text-white text-xs rounded px-2 py-1 border border-brand-500" title="Change the academic session in Settings › School Settings">
                   Session {session}

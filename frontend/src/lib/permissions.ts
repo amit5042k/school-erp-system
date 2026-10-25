@@ -18,7 +18,7 @@ const PAGE_AREAS: [string, string][] = [
   ['/visitors', 'front-office'], ['/complaints', 'front-office'], ['/postal', 'front-office'], ['/calls', 'front-office'],
   ['/incidents', 'front-office'], ['/suggestions', 'front-office'],
   ['/users', 'administration'], ['/settings', 'administration'], ['/backups', 'administration'],
-  ['/send-credentials', 'administration'], ['/roles', 'administration'],
+  ['/send-credentials', 'administration'], ['/roles', 'administration'], ['/imports', 'administration'],
 ];
 
 // Pages every staff member can open for their own records or school notices, whatever their role.

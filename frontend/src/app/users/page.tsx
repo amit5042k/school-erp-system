@@ -70,7 +70,13 @@ export default function UsersPage() {
 
   return (
     <Shell>
-      <h2 className="text-xl font-bold text-brand-700 mb-4">Users &amp; Roles</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <h2 className="text-xl font-bold text-brand-700">Users &amp; Roles</h2>
+        <div className="flex gap-2 text-sm">
+          <a href="/users/children" className="btn bg-gray-200">Parent ↔ Children</a>
+          <a href="/imports" className="btn bg-gray-200">Bulk Import</a>
+        </div>
+      </div>
       {err && <div className="text-red-700 text-sm mb-2">{err}</div>}
       {ok && <div className="text-green-700 text-sm mb-2">{ok}</div>}
 
