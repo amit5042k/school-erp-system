@@ -1,3 +1,5 @@
+import { effectiveRoleFor } from './permissions';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000/api';
 
 export function getToken(): string | null {
@@ -14,11 +16,22 @@ export function clearSession() {
   localStorage.removeItem('erp_user');
 }
 
-export function getUser<T = any>(): T | null {
+/** The signed-in user exactly as stored (role = base role). Use for menus and account info. */
+export function getStoredUser<T = any>(): T | null {
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem('erp_user');
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
+}
+
+/**
+ * The signed-in user as the current page should treat them. For staff roles (principal, accountant, ...) `role`
+ * is 'admin' on pages where their role has full access and 'teacher' elsewhere, matching what the server allows.
+ */
+export function getUser<T = any>(): T | null {
+  const u = getStoredUser<any>();
+  if (!u || typeof window === 'undefined') return u;
+  return { ...u, role: effectiveRoleFor(u, window.location.pathname) } as T;
 }
 
 export function setUser(user: any) {

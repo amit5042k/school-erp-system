@@ -2,6 +2,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const db = require('../config/db');
+const roles = require('../utils/roles');
+
+// What the frontend needs to build menus: base role, staff role and its per-area levels.
+function roleInfo(user) {
+  const r = user.role === 'teacher' ? roles.get(user.role_key || 'teacher') : null;
+  const name = user.role === 'admin' ? 'Super Admin' : r ? r.name : user.role === 'student' ? 'Student' : 'Parent';
+  return { baseRole: user.role, roleKey: r ? r.key : null, roleName: name, perms: r ? r.perms : null };
+}
 
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 
@@ -19,7 +27,10 @@ exports.login = (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE username = ? AND active = 1').get(username);
   // Compare against a dummy hash when the user doesn't exist so response time doesn't reveal valid usernames.
   const ok = bcrypt.compareSync(password, user ? user.password_hash : DUMMY_HASH) && !!user;
-  if (!ok || (role && user.role !== role)) return res.status(401).json({ error: 'Invalid credentials' });
+  // Staff roles (principal, accountant, ...) sit on the 'teacher' base, so "staff" choices on the login form match both.
+  const staffPick = role === 'admin' || role === 'teacher';
+  const roleOk = !role || user.role === role || (staffPick && (user.role === 'admin' || user.role === 'teacher'));
+  if (!ok || !roleOk) return res.status(401).json({ error: 'Invalid credentials' });
   if (user.blocked_reason) return res.status(403).json({ error: `Access blocked: ${user.blocked_reason}. Please contact the school office.` });
 
   db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(new Date().toISOString(), user.id);
@@ -41,17 +52,19 @@ exports.login = (req, res) => {
       email: user.email,
       linkedId: user.linked_id,
       mustChangePassword: !!user.must_change_password,
+      ...roleInfo(user),
     },
   });
 };
 
 exports.me = (req, res) => {
-  const user = db.prepare('SELECT id, username, role, full_name, email, linked_id, must_change_password FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT id, username, role, role_key, full_name, email, linked_id, must_change_password FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json({
     id: user.id, username: user.username, role: user.role,
     fullName: user.full_name, email: user.email, linkedId: user.linked_id,
     mustChangePassword: !!user.must_change_password,
+    ...roleInfo(user),
   });
 };
 

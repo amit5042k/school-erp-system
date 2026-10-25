@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const roles = require('../utils/roles');
+const { effectiveRole } = require('../utils/permissions');
 
-const loadUser = db.prepare('SELECT id, username, role, full_name, linked_id, active, must_change_password, blocked_reason FROM users WHERE id = ?');
+const loadUser = db.prepare('SELECT id, username, role, role_key, full_name, linked_id, active, must_change_password, blocked_reason FROM users WHERE id = ?');
 
 // Reachable while a password change is pending, so the user can see who they are and change it.
 const PASSWORD_CHANGE_ALLOWED = ['/api/auth/me', '/api/auth/change-password', '/api/settings'];
@@ -20,9 +22,19 @@ function authRequired(req, res, next) {
   const user = loadUser.get(payload.id);
   if (!user || !user.active) return res.status(401).json({ error: 'Account is disabled' });
   if (user.blocked_reason) return res.status(401).json({ error: `Access blocked: ${user.blocked_reason}`, code: 'BLOCKED' });
-  req.user = { id: user.id, username: user.username, role: user.role, name: user.full_name, linked_id: user.linked_id };
-  if (user.must_change_password && !PASSWORD_CHANGE_ALLOWED.includes(req.originalUrl.split('?')[0])) {
+  req.user = { id: user.id, username: user.username, role: user.role, base_role: user.role, name: user.full_name, linked_id: user.linked_id };
+  const path = req.originalUrl.split('?')[0];
+  if (user.must_change_password && !PASSWORD_CHANGE_ALLOWED.includes(path)) {
     return res.status(403).json({ error: 'You must change your password before continuing', code: 'PASSWORD_CHANGE_REQUIRED' });
+  }
+  // Staff roles: act as admin or teacher for this request depending on the role's level for its area.
+  const staffRole = user.role === 'teacher' ? roles.get(user.role_key || 'teacher') : null;
+  if (staffRole) {
+    req.user.role_key = staffRole.key;
+    req.user.perms = staffRole.perms;
+    const eff = effectiveRole(staffRole.perms, req.method, path.replace(/^\/api/, ''));
+    if (eff.deny) return res.status(403).json({ error: `Your role (${staffRole.name}) does not have access to ${eff.deny}`, code: 'AREA_DENIED' });
+    req.user.role = eff.role;
   }
   next();
 }

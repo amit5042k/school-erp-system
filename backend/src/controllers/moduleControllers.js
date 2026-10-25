@@ -548,27 +548,47 @@ function checkLink(role, linkedId) {
   const table = role === 'teacher' ? 'teachers' : 'students';
   return db.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(linkedId) ? null : `No ${table.slice(0, -1)} with id ${linkedId}`;
 }
+const staffRoles = require('../utils/roles');
+// Only a Super Admin may create, reset or disable Super Admin accounts, so other roles can't promote themselves.
+const touchesSuperAdmin = (req, targetId) =>
+  req.user.base_role !== 'admin' && db.prepare("SELECT role FROM users WHERE id = ?").get(targetId)?.role === 'admin';
+
 exports.users = {
   list(req, res) {
-    res.json(db.prepare('SELECT id, username, role, full_name, email, phone, linked_id, active FROM users ORDER BY id').all());
+    const rows = db.prepare('SELECT id, username, role, role_key, full_name, email, phone, linked_id, active, last_login_at FROM users ORDER BY id').all();
+    res.json(rows.map(u => ({ ...u, role_name: u.role === 'admin' ? 'Super Admin' : u.role === 'teacher' ? (staffRoles.get(u.role_key || 'teacher')?.name || u.role_key) : u.role === 'student' ? 'Student' : 'Parent' })));
   },
   create(req, res) {
     const { username, password, role, full_name, email, phone, linked_id } = req.body;
+    const roleKey = role === 'teacher' ? (req.body.role_key || 'teacher') : null;
     if (!username || !password || !role || !full_name) return res.status(400).json({ error: 'username, password, role, full_name required' });
     if (!USER_ROLES.includes(role)) return res.status(400).json({ error: `role must be one of ${USER_ROLES.join(', ')}` });
+    if (role === 'admin' && req.user.base_role !== 'admin') return res.status(403).json({ error: 'Only a Super Admin can create Super Admin accounts' });
+    if (roleKey && !staffRoles.get(roleKey)) return res.status(400).json({ error: `Unknown staff role ${roleKey}` });
     if (String(password).length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
     const linkProblem = checkLink(role, linked_id);
     if (linkProblem) return res.status(400).json({ error: linkProblem });
     try {
       const info = db.prepare(`
-        INSERT INTO users (username, password_hash, role, full_name, email, phone, linked_id, must_change_password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-      `).run(username, bcrypt.hashSync(password, 10), role, full_name, email || null, phone || null, linked_id || null);
+        INSERT INTO users (username, password_hash, role, role_key, full_name, email, phone, linked_id, must_change_password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+      `).run(username, bcrypt.hashSync(password, 10), role, roleKey, full_name, email || null, phone || null, linked_id || null);
       res.status(201).json({ id: info.lastInsertRowid });
     } catch (e) { dbError(res, e); }
   },
+  setRole(req, res) {
+    const u = db.prepare('SELECT id, role FROM users WHERE id = ?').get(req.params.id);
+    if (!u) return res.status(404).json({ error: 'Not found' });
+    if (u.role !== 'teacher') return res.status(400).json({ error: 'Only staff logins have a staff role' });
+    if (u.id === req.user.id && req.user.base_role !== 'admin') return res.status(403).json({ error: "You can't change your own role; ask a Super Admin" });
+    const key = req.body.role_key;
+    if (!staffRoles.get(key)) return res.status(400).json({ error: 'Unknown staff role' });
+    db.prepare('UPDATE users SET role_key = ? WHERE id = ?').run(key, u.id);
+    res.json({ ok: true });
+  },
   setActive(req, res) {
     if (Number(req.params.id) === req.user.id && !req.body.active) return res.status(400).json({ error: 'You cannot deactivate your own account' });
+    if (touchesSuperAdmin(req, req.params.id)) return res.status(403).json({ error: 'Only a Super Admin can change a Super Admin account' });
     const info = db.prepare('UPDATE users SET active = ? WHERE id = ?').run(req.body.active ? 1 : 0, req.params.id);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
@@ -576,6 +596,7 @@ exports.users = {
   resetPassword(req, res) {
     const { password } = req.body;
     if (!password || String(password).length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
+    if (touchesSuperAdmin(req, req.params.id)) return res.status(403).json({ error: 'Only a Super Admin can change a Super Admin account' });
     const info = db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(bcrypt.hashSync(password, 10), req.params.id);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });

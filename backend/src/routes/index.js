@@ -147,6 +147,7 @@ router.get('/users', authRequired, requireRole(...ADMIN), m.users.list);
 router.post('/users', authRequired, requireRole(...ADMIN), m.users.create);
 router.post('/users/:id/active', authRequired, requireRole(...ADMIN), m.users.setActive);
 router.post('/users/:id/reset-password', authRequired, requireRole(...ADMIN), m.users.resetPassword);
+router.post('/users/:id/role', authRequired, requireRole(...ADMIN), m.users.setRole);
 
 // Settings
 router.get('/settings', authRequired, m.settings.get);

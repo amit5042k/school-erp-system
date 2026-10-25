@@ -7,6 +7,13 @@ const { db, ROLES, auth, role, safe, today } = require('./_kit');
 const { reports, meta } = require('../utils/reports');
 const { types: masterTypes, flatten } = require('../utils/masters');
 const backup = require('../utils/backup');
+const { roleInArea, REPORT_GROUP_AREAS } = require('../utils/permissions');
+
+// Reports and lists belong to a module group; staff roles get their level for that group's area.
+function roleForGroup(user, group) {
+  if (!user.perms) return user.role;
+  return roleInArea(user.perms, REPORT_GROUP_AREAS[group]);
+}
 const messaging = require('../utils/messaging');
 
 /* ---------- Files ---------- */
@@ -93,7 +100,7 @@ function resolveDefault(d) {
 }
 
 function catalog(req, res) {
-  const list = [...reports.values()].filter(r => r.roles.includes(req.user.role)).map(r => ({
+  const list = [...reports.values()].filter(r => r.roles.includes(roleForGroup(req.user, r.group))).map(r => ({
     ...meta(r), params: r.params.map(p => ({ ...p, default: resolveDefault(p.default) })),
   }));
   res.json(list);
@@ -101,7 +108,8 @@ function catalog(req, res) {
 
 function runReport(req, res) {
   const r = reports.get(req.params.key);
-  if (!r || !r.roles.includes(req.user.role)) return res.status(404).json({ error: 'Report not found' });
+  if (!r || !r.roles.includes(roleForGroup(req.user, r.group))) return res.status(404).json({ error: 'Report not found' });
+  req.user = { ...req.user, role: roleForGroup(req.user, r.group) };
   const params = {};
   for (const p of r.params) {
     const v = req.query[p.name];
@@ -117,7 +125,9 @@ function masterType(req, res, mode) {
   const t = masterTypes.get(req.params.type);
   if (!t) { res.status(404).json({ error: 'Unknown list' }); return null; }
   const allowed = mode === 'write' ? t.write : t.read;
-  if (!allowed.includes(req.user.role)) { res.status(403).json({ error: 'Forbidden' }); return null; }
+  // Lookup names feed dropdowns everywhere, so reading never needs more than teacher level.
+  const role = roleForGroup(req.user, t.group) || (mode === 'read' ? 'teacher' : null);
+  if (!allowed.includes(role)) { res.status(403).json({ error: 'Forbidden' }); return null; }
   return t;
 }
 function splitMaster(t, body) {
@@ -127,8 +137,8 @@ function splitMaster(t, body) {
 }
 const masters = {
   types(req, res) {
-    res.json([...masterTypes.values()].filter(t => t.read.includes(req.user.role))
-      .map(({ type, title, group, fields, description, write }) => ({ type, title, group, fields, description, can_write: write.includes(req.user.role) })));
+    res.json([...masterTypes.values()].filter(t => t.read.includes(roleForGroup(req.user, t.group) || 'teacher'))
+      .map(({ type, title, group, fields, description, write }) => ({ type, title, group, fields, description, can_write: write.includes(roleForGroup(req.user, group)) })));
   },
   list(req, res) {
     const t = masterType(req, res, 'read'); if (!t) return;

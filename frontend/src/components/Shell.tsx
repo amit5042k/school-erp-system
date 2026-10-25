@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { api, clearSession, getToken, getUser } from '@/lib/api';
+import { api, clearSession, getStoredUser, getToken, setUser } from '@/lib/api';
+import { canSeePage, type Perms } from '@/lib/permissions';
 
 /**
  * Sidebar configuration.
@@ -56,13 +57,18 @@ const NAV: NavItem[] = [
   { label: 'Inventory',             href: '/inventory',             icon: '📦', roles: ADMIN },
   { label: 'Item Requests',         href: '/inventory/requests',    icon: '📦', roles: ['teacher'] },
   { label: 'Users & Roles',         href: '/users',                 icon: '🔐', roles: ADMIN },
+  { label: 'Roles & Permissions',   href: '/roles',                 icon: '🛡', roles: ADMIN },
   { label: 'Backups',               href: '/backups',               icon: '💾', roles: ADMIN },
   { label: 'Reports',               href: '/reports',               icon: '📊' },
 ];
 
 
-function navFor(role: Role): NavItem[] {
-  const can = (i: NavItem, inherited?: Role[]) => (i.roles || inherited || ['admin', 'teacher']).includes(role);
+function navFor(role: Role, perms?: Perms | null): NavItem[] {
+  // Staff roles (principal, accountant, ...) see what their role's areas allow; others go by the item's roles.
+  const can = (i: NavItem, inherited?: Role[]) => {
+    if (perms && role === 'teacher') return i.href ? canSeePage(perms, i.href) : true;
+    return (i.roles || inherited || ['admin', 'teacher']).includes(role);
+  };
   return NAV.flatMap(item => {
     if (!item.children) return can(item) ? [item] : [];
     if (item.roles && !can(item)) return [];
@@ -88,12 +94,17 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const u = getUser();
+    const u = getStoredUser<any>();
     if (!u || !getToken()) { clearSession(); router.replace('/login'); return; }
     if (u.mustChangePassword && pathname !== '/change-password') { router.replace('/change-password?required=1'); return; }
     api<{ academic_year?: string }>('/settings').then(s => setSession(s?.academic_year || '')).catch(() => {});
     if (!u.mustChangePassword) api<any>('/notifications/summary').then(setNotif).catch(() => {});
     setUserState(u);
+    // Role and permissions can change while signed in (e.g. the principal edits a role), so refresh them.
+    api<any>('/auth/me').then(me => {
+      const fresh = { ...u, ...me };
+      if (JSON.stringify(fresh) !== JSON.stringify(u)) { setUser(fresh); setUserState(fresh); }
+    }).catch(() => {});
   }, [router, pathname]);
 
   // Auto-open the group whose child is current route
@@ -130,7 +141,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="p-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
           <ul className="sidenav">
-            {navFor(user.role).map(item => {
+            {navFor(user.baseRole || user.role, user.perms).map(item => {
               if (item.children) {
                 const expanded = openGroup === item.label;
                 const anyActive = item.children.some(c => isActive(c.href, pathname));
@@ -200,7 +211,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <Link href="/announcements" className="opacity-90 hover:opacity-100">Circulars</Link>
               <Link href="/birthdays" className="opacity-90 hover:opacity-100">Birthdays</Link>
 
-              {session && (user.role === 'admin' ? (
+              {session && ((user.baseRole || user.role) === 'admin' || user.perms?.administration === 'full' ? (
                 <Link href="/settings" className="bg-brand-600 text-white text-xs rounded px-2 py-1 border border-brand-500" title="Change the academic session in Settings › School Settings">
                   Session {session}
                 </Link>
@@ -240,7 +251,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               >
                 <div className="hidden sm:block text-right">
                   <div className="font-semibold leading-tight">{user.fullName}</div>
-                  <div className="opacity-80 text-[11px] capitalize">{user.role === 'admin' ? 'Super User' : user.role}</div>
+                  <div className="opacity-80 text-[11px] capitalize">{user.roleName || (user.role === 'admin' ? 'Super Admin' : user.role)}</div>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-white text-brand-700 grid place-items-center font-bold">
                   {(user.fullName || '?').split(' ').map((w: string) => w[0]).slice(0, 2).join('')}

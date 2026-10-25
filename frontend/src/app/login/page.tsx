@@ -90,7 +90,7 @@ export default function LoginPage() {
               <div>
                 <label className="label" htmlFor="role">Login As</label>
                 <select id="role" className="input" value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="admin">Administrator</option>
+                  <option value="admin">Administration / Office</option>
                   <option value="teacher">Teacher / Staff</option>
                   <option value="student">Student</option>
                   <option value="parent">Parent</option>
