@@ -117,7 +117,9 @@ function runReport(req, res) {
     if (p.required && !params[p.name]) return res.status(400).json({ error: `${p.label || p.name} is required` });
   }
   const rows = r.run(params, req.user) || [];
-  res.json({ ...meta(r), params: r.params.map(p => ({ ...p, default: resolveDefault(p.default) })), values: params, rows, generated_at: new Date().toISOString() });
+  // Some reports (e.g. monthly registers) size their columns to the chosen filters.
+  const columns = typeof r.columnsFor === 'function' ? r.columnsFor(params) : r.columns;
+  res.json({ ...meta(r), columns, params: r.params.map(p => ({ ...p, default: resolveDefault(p.default) })), values: params, rows, generated_at: new Date().toISOString() });
 }
 
 /* ---------- Masters ---------- */

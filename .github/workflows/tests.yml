@@ -1,0 +1,33 @@
+# Runs the backend API test suites and the frontend typecheck/lint/build on every push.
+name: Tests
+
+on:
+  push:
+    paths-ignore: ['mobile/**', 'docs/**', '**.md']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Backend API tests
+        working-directory: backend
+        run: npm test
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+      - name: Frontend lint
+        working-directory: frontend
+        run: npx next lint --dir src
+      - name: Frontend build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_BASE: /api
+        run: npx next build

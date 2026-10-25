@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# Verifies each reported bug is fixed. Prints PASS/FAIL per check.
+B=${B:-localhost:5000/api}
+C='Content-Type: application/json'
+pass=0; fail=0
+j(){ node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(eval("(x=>"+process.argv[1]+")")(JSON.parse(s)))}catch(e){console.log("ERR:"+s.slice(0,200))}})' "$1"; }
+tok(){ curl -s -X POST $B/auth/login -H "$C" -d "{\"username\":\"$1\",\"password\":\"$2\"}" | j 'x.token'; }
+code(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
+check(){ if [ "$2" = "$3" ]; then echo "PASS  $1"; pass=$((pass+1)); else echo "FAIL  $1  (expected $3, got $2)"; fail=$((fail+1)); fi; }
+A=$(tok admin admin123); T=$(tok ritu teacher123); T2=$(tok anil teacher123); S=$(tok ADM2025001 student123)
+HA="Authorization: Bearer $A"; HT="Authorization: Bearer $T"; HT2="Authorization: Bearer $T2"; HS="Authorization: Bearer $S"
+SID=$(curl -s $B/auth/me -H "$HS" | j 'x.linkedId')
+OTHER=$(curl -s $B/students -H "$HA" | j "x.find(s=>s.id!==$SID).id")
+
+echo "--- 1. role checks on reads"
+for p in payroll enquiries visitors complaints calls postal inventory/items communications reports/summary leave-allowances; do
+  check "student blocked from /$p" "$(code $B/$p -H "$HS")" 403
+done
+check "teacher blocked from /payroll" "$(code $B/payroll -H "$HT")" 403
+check "admin can read /payroll" "$(code $B/payroll -H "$HA")" 200
+check "student sees only own student row" "$(curl -s $B/students -H "$HS" | j "x.length===1&&x[0].id===$SID")" true
+echo "--- 2. own records only"
+check "student blocked from other's fees" "$(code $B/fees/student/$OTHER -H "$HS")" 403
+check "student can read own fees" "$(code $B/fees/student/$SID -H "$HS")" 200
+check "student blocked from other's attendance" "$(code $B/attendance/student/$OTHER -H "$HS")" 403
+check "student blocked from other's profile" "$(code $B/students/$OTHER -H "$HS")" 403
+check "marks?student_id=other returns only own" "$(curl -s "$B/marks?student_id=$OTHER" -H "$HS" | j "x.every(r=>r.student_id===$SID)")" true
+echo "--- 3. leaves"
+R=$(curl -s -X POST $B/leaves -H "$HT" -H "$C" -d '{"teacher_id":999,"leave_type":"Earned Leave","from_date":"2026-11-01","to_date":"2026-11-03","status":"approved"}')
+LID=$(echo "$R" | j 'x.id')
+ME=$(curl -s $B/auth/me -H "$HT" | j 'x.linkedId')
+L=$(curl -s $B/leaves/$LID -H "$HT")
+check "teacher leave forced to own teacher_id" "$(echo "$L" | j "x.teacher_id===$ME")" true
+check "status in body ignored (stays pending)" "$(echo "$L" | j 'x.status')" pending
+check "PUT status=approved ignored" "$(curl -s -X PUT $B/leaves/$LID -H "$HT" -H "$C" -d '{"status":"approved","reason":"x"}' >/dev/null; curl -s $B/leaves/$LID -H "$HT" | j 'x.status')" pending
+check "other teacher can't see it" "$(code $B/leaves/$LID -H "$HT2")" 404
+check "other teacher can't delete it" "$(code -X DELETE $B/leaves/$LID -H "$HT2")" 403
+check "teacher can't approve" "$(code -X POST $B/leaves/$LID/decision -H "$HT" -H "$C" -d '{"action":"approve"}')" 403
+check "to_date before from_date rejected" "$(code -X POST $B/leaves -H "$HT" -H "$C" -d '{"leave_type":"Earned Leave","from_date":"2026-11-05","to_date":"2026-11-01"}')" 400
+check "admin approves" "$(code -X POST $B/leaves/$LID/decision -H "$HA" -H "$C" -d '{"action":"approve"}')" 200
+check "teacher can't edit approved leave" "$(code -X PUT $B/leaves/$LID -H "$HT" -H "$C" -d '{"reason":"y"}')" 400
+check "approved leave counted in balance" "$(curl -s $B/leaves/balance/$ME -H "$HT" | j 'x.rows.find(r=>r.leave_type==="Earned Leave").availed>=3')" true
+echo "--- 4. deactivation"
+UID_=$(curl -s $B/users -H "$HA" | j 'x.find(u=>u.username==="anil").id')
+curl -s -X POST $B/users/$UID_/active -H "$HA" -H "$C" -d '{"active":false}' >/dev/null
+check "deactivated user's token rejected" "$(code $B/students -H "$HT2")" 401
+curl -s -X POST $B/users/$UID_/active -H "$HA" -H "$C" -d '{"active":true}' >/dev/null
+check "reactivated user works again" "$(code $B/students -H "$HT2")" 200
+ADMIN_ID=$(curl -s $B/auth/me -H "$HA" | j 'x.id')
+check "admin can't deactivate self" "$(code -X POST $B/users/$ADMIN_ID/active -H "$HA" -H "$C" -d '{"active":false}')" 400
+echo "--- 5. fees"
+FID=$(curl -s -X POST $B/fees -H "$HA" -H "$C" -d "{\"student_id\":$SID,\"term\":\"Test\",\"amount\":1000,\"due_date\":\"2026-12-31\"}" | j 'x.id')
+check "negative payment rejected" "$(code -X POST $B/fees/$FID/pay -H "$HA" -H "$C" -d '{"amount":-500}')" 400
+check "non-numeric payment rejected" "$(code -X POST $B/fees/$FID/pay -H "$HA" -H "$C" -d '{"amount":"abc"}')" 400
+check "overpayment rejected" "$(code -X POST $B/fees/$FID/pay -H "$HA" -H "$C" -d '{"amount":1500}')" 400
+check "partial payment ok" "$(curl -s -X POST $B/fees/$FID/pay -H "$HA" -H "$C" -d '{"amount":400}' | j 'x.status')" partial
+check "final payment ok" "$(curl -s -X POST $B/fees/$FID/pay -H "$HA" -H "$C" -d '{"amount":600}' | j 'x.status')" paid
+check "paying a paid fee rejected" "$(code -X POST $B/fees/$FID/pay -H "$HA" -H "$C" -d '{"amount":1}')" 400
+check "both receipts kept" "$(curl -s $B/fees/$FID/payments -H "$HA" | j 'x.length')" 2
+check "student sees own receipts" "$(code $B/fees/$FID/payments -H "$HS")" 200
+check "zero fee amount rejected" "$(code -X POST $B/fees -H "$HA" -H "$C" -d "{\"student_id\":$SID,\"term\":\"T\",\"amount\":0}")" 400
+OD=$(curl -s -X POST $B/fees -H "$HA" -H "$C" -d "{\"student_id\":$SID,\"term\":\"Old\",\"amount\":10,\"due_date\":\"2020-01-01\"}" | j 'x.id')
+check "past-due fee shows overdue" "$(curl -s $B/fees/student/$SID -H "$HS" | j "x.find(f=>f.id===$OD).status")" overdue
+echo "--- 6. inventory"
+IID=$(curl -s -X POST $B/inventory/items -H "$HA" -H "$C" -d '{"sku":"VERIFY-1","name":"Chalk","qty_on_hand":10}' | j 'x.id')
+check "issue more than stock rejected" "$(code -X POST $B/inventory/movements -H "$HA" -H "$C" -d "{\"item_id\":$IID,\"movement_type\":\"issue\",\"qty\":11}")" 400
+check "negative purchase rejected" "$(code -X POST $B/inventory/movements -H "$HA" -H "$C" -d "{\"item_id\":$IID,\"movement_type\":\"purchase\",\"qty\":-5}")" 400
+check "bad movement type rejected" "$(code -X POST $B/inventory/movements -H "$HA" -H "$C" -d "{\"item_id\":$IID,\"movement_type\":\"steal\",\"qty\":1}")" 400
+curl -s -X POST $B/inventory/movements -H "$HA" -H "$C" -d "{\"item_id\":$IID,\"movement_type\":\"issue\",\"qty\":4}" >/dev/null
+curl -s -X POST $B/inventory/movements -H "$HA" -H "$C" -d "{\"item_id\":$IID,\"movement_type\":\"adjust\",\"qty\":-1}" >/dev/null
+check "issue 4 + adjust -1 leaves 5" "$(curl -s $B/inventory/items/$IID -H "$HA" | j 'x.qty_on_hand')" 5
+check "negative stock on item rejected" "$(code -X PUT $B/inventory/items/$IID -H "$HA" -H "$C" -d '{"qty_on_hand":-3}')" 400
+echo "--- 7. timetable"
+for s in Maths Science; do curl -s -X POST $B/timetable -H "$HA" -H "$C" -d "{\"class_id\":1,\"day\":\"Saturday\",\"period\":8,\"subject\":\"$s\"}" >/dev/null; done
+TT=$(curl -s $B/timetable/class/1 -H "$HA")
+check "saving a slot twice keeps one row" "$(echo "$TT" | j 'x.filter(r=>r.day==="Saturday"&&r.period===8).length')" 1
+check "second save updated subject" "$(echo "$TT" | j 'x.find(r=>r.day==="Saturday"&&r.period===8).subject')" Science
+check "invalid day rejected" "$(code -X POST $B/timetable -H "$HA" -H "$C" -d '{"class_id":1,"day":"Funday","period":1,"subject":"X"}')" 400
+echo "--- 8. hostel"
+HID=$(curl -s -X POST $B/hostels -H "$HA" -H "$C" -d '{"name":"Verify Hostel","type":"boys"}' | j 'x.id')
+RID=$(curl -s -X POST $B/hostel-rooms -H "$HA" -H "$C" -d "{\"hostel_id\":$HID,\"room_no\":\"V1\",\"capacity\":1}" | j 'x.id')
+RID2=$(curl -s -X POST $B/hostel-rooms -H "$HA" -H "$C" -d "{\"hostel_id\":$HID,\"room_no\":\"V2\",\"capacity\":2}" | j 'x.id')
+AID=$(curl -s -X POST $B/hostel-allotments -H "$HA" -H "$C" -d "{\"student_id\":$SID,\"room_id\":$RID}" | j 'x.id')
+check "room over capacity rejected" "$(code -X POST $B/hostel-allotments -H "$HA" -H "$C" -d "{\"student_id\":$OTHER,\"room_id\":$RID}")" 409
+check "student in two rooms rejected" "$(code -X POST $B/hostel-allotments -H "$HA" -H "$C" -d "{\"student_id\":$SID,\"room_id\":$RID2}")" 409
+check "vacate works" "$(code -X POST $B/hostel-allotments/$AID/vacate -H "$HA" -H "$C" -d '{}')" 200
+check "re-allot to same room after vacating" "$(code -X POST $B/hostel-allotments -H "$HA" -H "$C" -d "{\"student_id\":$SID,\"room_id\":$RID}")" 201
+echo "--- 9. persisted pages"
+check "event saved" "$(code -X POST $B/events -H "$HA" -H "$C" -d '{"event_date":"2026-12-25","type":"Holiday","name":"Christmas"}')" 201
+check "student can read events" "$(curl -s $B/events -H "$HS" | j 'x.some(e=>e.name==="Christmas")')" true
+check "survey saved" "$(code -X POST $B/surveys -H "$HT" -H "$C" -d '{"question":"Q?","option1":"A","option2":"B","expire_date":"2026-12-31"}')" 201
+check "activity saved" "$(code -X POST $B/activities -H "$HT" -H "$C" -d '{"name":"Sports Day","activity_date":"2026-11-20","file_names":"a.jpg"}')" 201
+N1=$(curl -s $B/prospectus/next-no -H "$HA" | j 'x.prospectus_no')
+P=$(curl -s -X POST $B/prospectus -H "$HA" -H "$C" -d '{"first_name":"Riya","gender":"F","prospectus_amount":500,"bank_charges":20,"total_amount":1}')
+check "prospectus saved with server number" "$(curl -s $B/prospectus/$(echo "$P" | j 'x.id') -H "$HA" | j 'x.prospectus_no')" "$N1"
+check "prospectus total computed on server" "$(curl -s $B/prospectus/$(echo "$P" | j 'x.id') -H "$HA" | j 'x.total_amount')" 520
+check "prospectus number advances" "$(curl -s $B/prospectus/next-no -H "$HA" | j "x.prospectus_no!=='$N1'")" true
+check "award saved" "$(code -X POST $B/awards -H "$HA" -H "$C" -d '{"recipient":"Ritu","recipient_type":"staff","title":"Best Teacher"}')" 201
+check "student can post suggestion" "$(code -X POST $B/suggestions -H "$HS" -H "$C" -d '{"subject":"Canteen","body":"More fruit"}')" 201
+check "student can't read suggestions" "$(code $B/suggestions -H "$HS")" 403
+check "incident saved" "$(code -X POST $B/incidents -H "$HT" -H "$C" -d '{"incident_date":"2026-10-10","description":"Broken window"}' )" 403
+check "admin logs incident" "$(code -X POST $B/incidents -H "$HA" -H "$C" -d '{"incident_date":"2026-10-10","description":"Broken window"}')" 201
+echo "--- 10. classes"
+CID=$(curl -s -X POST $B/classes -H "$HA" -H "$C" -d '{"name":"Verify","section":"Z","description":"tmp"}' | j 'x.id')
+check "class update" "$(code -X PUT $B/classes/$CID -H "$HA" -H "$C" -d '{"class_teacher_id":1,"description":"d2"}')" 200
+check "class description saved" "$(curl -s $B/classes -H "$HA" | j "x.find(c=>c.id===$CID).description")" d2
+check "empty class delete" "$(code -X DELETE $B/classes/$CID -H "$HA")" 200
+check "class with students can't be deleted" "$(code -X DELETE $B/classes/1 -H "$HA")" 409
+echo "--- 11. teachers"
+TID=$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"VER-1","full_name":"V T","department":"Science"}' | j 'x.id')
+curl -s -X PUT $B/teachers/$TID -H "$HA" -H "$C" -d '{"department":"Maths","photo_url":"https://x/y.png"}' >/dev/null
+check "teacher department/photo saved" "$(curl -s $B/teachers/$TID -H "$HA" | j 'x.department+"|"+x.photo_url')" "Maths|https://x/y.png"
+echo "--- 12. announcements"
+curl -s -X POST $B/announcements -H "$HA" -H "$C" -d '{"title":"VERIFY-STU","body":"x","audience":"student"}' >/dev/null
+check "admin sees student-targeted post" "$(curl -s $B/announcements -H "$HA" | j 'x.some(a=>a.title==="VERIFY-STU")')" true
+check "teacher doesn't see student post" "$(curl -s $B/announcements -H "$HT" | j 'x.some(a=>a.title==="VERIFY-STU")')" false
+check "student sees student post" "$(curl -s $B/announcements -H "$HS" | j 'x.some(a=>a.title==="VERIFY-STU")')" true
+check "bad audience rejected" "$(code -X POST $B/announcements -H "$HA" -H "$C" -d '{"title":"x","body":"x","audience":"aliens"}')" 400
+echo "--- 15. friendly errors"
+BID=$(curl -s -X POST $B/books -H "$HA" -H "$C" -d '{"book_no":"VER-B1","title":"T","qty_total":2}' | j 'x.id')
+check "new book qty_available defaults to total" "$(curl -s $B/books/$BID -H "$HA" | j 'x.qty_available')" 2
+curl -s -X POST $B/book-issues -H "$HA" -H "$C" -d "{\"book_id\":$BID,\"student_id\":$SID}" >/dev/null
+DEL=$(curl -s -X DELETE $B/books/$BID -H "$HA")
+check "delete issued book gives readable 409" "$(echo "$DEL" | j '!x.error.includes("FOREIGN KEY")&&x.error.length>10')" true
+check "qty_available > total rejected" "$(code -X PUT $B/books/$BID -H "$HA" -H "$C" -d '{"qty_available":9}')" 400
+check "student sees only own book issues" "$(curl -s $B/book-issues -H "$HS" | j "x.every(i=>i.student_id===$SID)")" true
+check "duplicate admission no gives 409" "$(code -X POST $B/students -H "$HA" -H "$C" -d '{"admission_no":"ADM2025001","full_name":"Dup"}')" 409
+check "marks > max rejected" "$(code -X POST $B/marks -H "$HA" -H "$C" -d "{\"exam_id\":1,\"student_id\":$SID,\"subject\":\"Maths\",\"marks_obtained\":120,\"max_marks\":100}")" 400
+check "invalid attendance status gives 400" "$(code -X POST $B/attendance/bulk -H "$HA" -H "$C" -d "{\"date\":\"2026-10-01\",\"records\":[{\"student_id\":$SID,\"status\":\"sleeping\"}]}")" 400
+check "unknown api route gives JSON 404" "$(code $B/nope -H "$HA")" 404
+echo "--- 16. parent"
+PU=$(curl -s -X POST $B/users -H "$HA" -H "$C" -d "{\"username\":\"verify_parent\",\"password\":\"parent123\",\"role\":\"parent\",\"full_name\":\"Parent V\",\"linked_id\":$SID}" | j 'x.id')
+P0=$(tok verify_parent parent123)
+check "new parent must change password first" "$(code $B/dashboard -H "Authorization: Bearer $P0")" 403
+curl -s -X POST $B/auth/change-password -H "Authorization: Bearer $P0" -H "$C" -d '{"current_password":"parent123","new_password":"parent456"}' >/dev/null
+P_=$(tok verify_parent parent456)
+check "parent dashboard shows child" "$(curl -s $B/dashboard -H "Authorization: Bearer $P_" | j "x.student&&x.student.id===$SID")" true
+check "parent sees child fees" "$(code $B/fees/student/$SID -H "Authorization: Bearer $P_")" 200
+check "parent blocked from other child" "$(code $B/fees/student/$OTHER -H "Authorization: Bearer $P_")" 403
+echo "--- low"
+check "wrong role + wrong password: generic msg" "$(curl -s -X POST $B/auth/login -H "$C" -d '{"username":"admin","password":"wrongpass","role":"student"}' | j 'x.error')" "Invalid credentials"
+check "short reset password rejected" "$(code -X POST $B/users/$UID_/reset-password -H "$HA" -H "$C" -d '{"password":"1"}')" 400
+check "user with bad role rejected" "$(code -X POST $B/users -H "$HA" -H "$C" -d '{"username":"zz","password":"zzzzzz","role":"god","full_name":"Z"}')" 400
+check "teacher user needs a linked teacher" "$(code -X POST $B/users -H "$HA" -H "$C" -d '{"username":"zz","password":"zzzzzz","role":"teacher","full_name":"Z"}')" 400
+echo; echo "$pass passed, $fail failed"
+[ "$fail" -eq 0 ]

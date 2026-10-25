@@ -123,8 +123,8 @@ export default function ProspectusPage() {
             </select></div>
           <div><label className="label">First Name *</label><input className="input" required value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} /></div>
           <div><label className="label">Last Name</label><input className="input" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} /></div>
-          <div><label className="label">Father's Name</label><input className="input" value={form.father_name} onChange={e => setForm({ ...form, father_name: e.target.value })} /></div>
-          <div><label className="label">Mother's Name</label><input className="input" value={form.mother_name} onChange={e => setForm({ ...form, mother_name: e.target.value })} /></div>
+          <div><label className="label">Father&apos;s Name</label><input className="input" value={form.father_name} onChange={e => setForm({ ...form, father_name: e.target.value })} /></div>
+          <div><label className="label">Mother&apos;s Name</label><input className="input" value={form.mother_name} onChange={e => setForm({ ...form, mother_name: e.target.value })} /></div>
           <div><label className="label">Phone</label><input className="input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
           <div><label className="label">Alt Number</label><input className="input" value={form.alt_number} onChange={e => setForm({ ...form, alt_number: e.target.value })} /></div>
           <div><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>

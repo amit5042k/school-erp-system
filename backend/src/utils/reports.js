@@ -12,6 +12,7 @@
  *            default: a literal, or 'today' | 'monthStart' | 'yearStart' | 'currentMonth' | 'session'
  *   columns  [{ key, label, type?: 'text'|'number'|'money'|'date'|'percent', total?: boolean }]
  *   run      (params, user) => rows[]   params arrive as strings ('' when blank)
+ *   columnsFor optional (params) => columns, when columns depend on the filters (e.g. days in a month)
  *   description  optional one-line help text
  */
 const reports = new Map();

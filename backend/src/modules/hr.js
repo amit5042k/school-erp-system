@@ -707,21 +707,29 @@ function photoUpload(req, res) {
 
 /* ---------- Reports ---------- */
 const DAY_COLS = Array.from({ length: 31 }, (_, i) => ({ key: `d${i + 1}`, label: String(i + 1) }));
+// Register columns for the chosen month only (no 29–31 for shorter months).
+const withMonthDays = (cols) => (p) => {
+  const n = validMonth(p.month) ? monthDays(p.month) : 31;
+  return cols.filter(c => !/^d\d+$/.test(c.key) || Number(c.key.slice(1)) <= n);
+};
 const monthParam = { name: 'month', label: 'Month', type: 'month', default: 'currentMonth', required: true };
 const staffFilter = (user, teacherParam) => (user.role === 'admin' ? teacherParam : String(user.linked_id ?? -1));
 const leaveRange = (l) => [l.approved_from || l.from_date, l.approved_to || l.to_date];
 
-registerReport({
-  key: 'staff-attendance', title: 'Staff Attendance Report', group: 'Human Resource',
-  description: 'Monthly register. P present, LT late, H half day, L leave, A absent.',
-  params: [monthParam, { name: 'department', label: 'Department', type: 'text' }, { name: 'teacher_id', label: 'Staff', type: 'teacher' }],
-  columns: [
+const COLS_STAFF_ATTENDANCE = [
     { key: 'employee_no', label: 'Emp No' }, { key: 'full_name', label: 'Name' }, { key: 'department', label: 'Department' },
     ...DAY_COLS,
     { key: 'present', label: 'P', type: 'number', total: true }, { key: 'late', label: 'LT', type: 'number', total: true },
     { key: 'half_day', label: 'H', type: 'number', total: true }, { key: 'leave', label: 'L', type: 'number', total: true },
     { key: 'absent', label: 'A', type: 'number', total: true }, { key: 'pct', label: 'Attendance %', type: 'percent' },
-  ],
+  ];
+
+registerReport({
+  key: 'staff-attendance', title: 'Staff Attendance Report', group: 'Human Resource',
+  description: 'Monthly register. P present, LT late, H half day, L leave, A absent.',
+  params: [monthParam, { name: 'department', label: 'Department', type: 'text' }, { name: 'teacher_id', label: 'Staff', type: 'teacher' }],
+  columns: COLS_STAFF_ATTENDANCE,
+  columnsFor: withMonthDays(COLS_STAFF_ATTENDANCE),
   run: (p) => {
     if (!validMonth(p.month)) throw Object.assign(new Error('Month must be YYYY-MM'), { status: 400 });
     const n = monthDays(p.month), from = `${p.month}-01`, to = `${p.month}-${String(n).padStart(2, '0')}`;
@@ -795,17 +803,20 @@ registerReport({
   },
 });
 
-registerReport({
-  key: 'student-attendance', title: 'Student Attendance Report', group: 'Attendance', roles: ROLES.STAFF,
-  description: 'Monthly class register. P present, A absent, LT late, L leave.',
-  params: [monthParam, { name: 'class_id', label: 'Class', type: 'class' }],
-  columns: [
+const COLS_STUDENT_ATTENDANCE = [
     { key: 'admission_no', label: 'Adm No' }, { key: 'full_name', label: 'Name' }, { key: 'class', label: 'Class' }, { key: 'roll_no', label: 'Roll' },
     ...DAY_COLS,
     { key: 'present', label: 'P', type: 'number', total: true }, { key: 'late', label: 'LT', type: 'number', total: true },
     { key: 'leave', label: 'L', type: 'number', total: true }, { key: 'absent', label: 'A', type: 'number', total: true },
     { key: 'pct', label: 'Attendance %', type: 'percent' },
-  ],
+  ];
+
+registerReport({
+  key: 'student-attendance', title: 'Student Attendance Report', group: 'Attendance', roles: ROLES.STAFF,
+  description: 'Monthly class register. P present, A absent, LT late, L leave.',
+  params: [monthParam, { name: 'class_id', label: 'Class', type: 'class' }],
+  columns: COLS_STUDENT_ATTENDANCE,
+  columnsFor: withMonthDays(COLS_STUDENT_ATTENDANCE),
   run: (p) => {
     if (!validMonth(p.month)) throw Object.assign(new Error('Month must be YYYY-MM'), { status: 400 });
     const from = `${p.month}-01`, to = `${p.month}-${String(monthDays(p.month)).padStart(2, '0')}`;

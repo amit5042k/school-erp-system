@@ -7,7 +7,8 @@
     "start": "node src/server.js",
     "seed": "node src/utils/seed.js",
     "seed:dev": "node src/utils/seed.js --force --dev",
-    "backup": "node -e \"require('./src/utils/backup').backupNow().then(f => console.log('Backup written to', f))\""
+    "backup": "node -e \"require('./src/utils/backup').backupNow().then(f => console.log('Backup written to', f))\"",
+    "test": "bash test/run.sh"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
