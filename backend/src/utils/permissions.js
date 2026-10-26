@@ -34,6 +34,7 @@ const LEVELS = ['none', 'standard', 'full'];
 // API path prefix → area. First match wins, so more specific prefixes come first.
 const API_AREAS = [
   ['/imports/students', 'students'], ['/imports/parents', 'students'], ['/imports/student-logins', 'students'],
+  ['/payments', 'finance'], ['/student-leave', 'attendance'], ['/absent-alerts', 'communication'],
   ['/imports/staff', 'hr'], ['/imports/opening', 'finance'], ['/imports', 'administration'], ['/family', 'administration'],
   ['/comm/surveys', 'academic-comm'],
   ['/comm/announcements', 'communication'],

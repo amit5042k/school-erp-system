@@ -190,7 +190,8 @@ async function downloadBackup(req, res, next) {
 }
 
 function register(router) {
-  router.post('/uploads', auth, role(...ROLES.STAFF), handleUpload);
+  // Parents and students upload too (e.g. a medical certificate with a leave request).
+  router.post('/uploads', auth, role(...ROLES.ALL), handleUpload);
   router.get('/files/:name', serveFile);
 
   router.get('/report-catalog', auth, catalog);

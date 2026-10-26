@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import ExploreOptions from '@/components/ExploreOptions';
 import { api, fmtDate, fmtMoney, getUser } from '@/lib/api';
+import PayOnline from '../payments/_PayOnline';
 
 type Fee = { id: number; student_id: number; student_name: string; admission_no: string; term: string; head?: string | null; amount: number; paid: number; status: string; due_date: string; receipt_no?: string };
 
@@ -83,6 +84,7 @@ export default function FeesPage() {
           <div>Balance due: <b className={balance > 0 ? 'text-red-700' : 'text-green-700'}>{fmtMoney(balance)}</b></div>
           <Link className="btn bg-gray-200 text-sm" href="/finance/ledger">View Fee Ledger</Link>
         </div>
+        {balance > 0 && <PayOnline studentId={user?.linkedId} onPaid={load} />}
         {FeeTable}
         <div className="card p-4 mt-6 overflow-x-auto">
           <h3 className="font-semibold text-brand-700 mb-3">Receipts</h3>

@@ -1,9 +1,11 @@
 'use client';
 
-/** Explains what to put in backend/.env when SMS or email isn't set up yet. */
-export default function ConfigNotice({ status, channel }: { status: { sms: boolean; email: boolean } | null; channel?: 'sms' | 'email' }) {
+type Channel = 'sms' | 'email' | 'whatsapp';
+
+/** Explains what to put in backend/.env when SMS, email or WhatsApp isn't set up yet. */
+export default function ConfigNotice({ status, channel }: { status: { sms: boolean; email: boolean; whatsapp?: boolean } | null; channel?: Channel }) {
   if (!status) return null;
-  const missing = (channel ? [channel] : (['sms', 'email'] as const)).filter(c => !status[c]);
+  const missing = (channel ? [channel] : (['sms', 'email'] as Channel[])).filter(c => !status[c]);
   if (!missing.length) return null;
   return (
     <div className="text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded px-3 py-2 mb-4">
@@ -20,7 +22,12 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=office@yourschool.org
 SMTP_PASS=app-password
-SMTP_FROM="School Office <office@yourschool.org>"` : ''}
+SMTP_FROM="School Office <office@yourschool.org>"
+` : ''}{missing.includes('whatsapp') ? `# WhatsApp Business API provider (Interakt, Gupshup, AiSensy, Wati...): {to} and {message} placeholders
+WHATSAPP_API_URL=https://your-provider/send
+WHATSAPP_API_METHOD=POST
+WHATSAPP_API_BODY={"to":"{to}","text":"{message}"}
+WHATSAPP_API_HEADERS={"Authorization":"Bearer YOUR_KEY"}` : ''}
       </pre>
     </div>
   );

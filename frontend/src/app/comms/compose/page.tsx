@@ -27,8 +27,8 @@ export default function ComposePage({ searchParams }: { searchParams: { mode?: s
   const mode = MODES[searchParams.mode || ''] ? searchParams.mode! : 'staff';
   const cfg = MODES[mode];
   const [type, setType] = useState<TargetType>(cfg.types[0]);
-  const [channel, setChannel] = useState<'sms' | 'email'>('sms');
-  const [status, setStatus] = useState<{ sms: boolean; email: boolean } | null>(null);
+  const [channel, setChannel] = useState<'sms' | 'email' | 'whatsapp'>('sms');
+  const [status, setStatus] = useState<{ sms: boolean; email: boolean; whatsapp?: boolean } | null>(null);
   const [lists, setLists] = useState<{ teachers: any[]; students: any[]; classes: any[]; routes: any[]; staffGroups: any[]; studentGroups: any[]; templates: any[] }>(
     { teachers: [], students: [], classes: [], routes: [], staffGroups: [], studentGroups: [], templates: [] });
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -41,7 +41,7 @@ export default function ComposePage({ searchParams }: { searchParams: { mode?: s
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api<{ sms: boolean; email: boolean }>('/messaging/status').then(setStatus).catch(() => {});
+    api<{ sms: boolean; email: boolean; whatsapp?: boolean }>('/messaging/status').then(setStatus).catch(() => {});
     const load = (k: string, url: string) => api<any[]>(url).then(rows => setLists(l => ({ ...l, [k]: rows }))).catch(() => {});
     load('teachers', '/teachers'); load('students', '/students'); load('classes', '/classes'); load('routes', '/routes');
     load('staffGroups', '/comm/groups?kind=staff'); load('studentGroups', '/comm/groups?kind=student'); load('templates', '/masters/message-templates');
@@ -135,6 +135,7 @@ export default function ComposePage({ searchParams }: { searchParams: { mode?: s
               <select className="input" value={channel} onChange={e => setChannel(e.target.value as any)}>
                 <option value="sms">SMS{status && !status.sms ? ' (not configured)' : ''}</option>
                 <option value="email">Email{status && !status.email ? ' (not configured)' : ''}</option>
+                <option value="whatsapp">WhatsApp{status && !status.whatsapp ? ' (not configured)' : ''}</option>
               </select></div>
             <div><label className="label">Template</label>
               <select className="input" defaultValue="" onChange={e => { const t = lists.templates.find(x => String(x.id) === e.target.value); if (t) setBody(t.body || ''); }}>

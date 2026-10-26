@@ -26,8 +26,10 @@ const NAV: NavItem[] = [
   { label: 'Student',               href: '/students',              icon: '👤' },
   { label: 'Academic Communication',href: '/homework',              icon: '📚', roles: ALL },
   { label: 'Announcements',         href: '/announcements',         icon: '📣', roles: ALL },
+  { label: 'Student Leave',         href: '/student-leave',         icon: '🗓', roles: ALL },
   { label: 'Attendance',            href: '/attendance',            icon: '✓' },
   { label: 'Finance',               href: '/fees',                  icon: '₹', roles: ['admin', 'student', 'parent'] },
+  { label: 'Online Payments',       href: '/payments',              icon: '💳', roles: ADMIN },
   { label: 'Documents',             href: '/documents',             icon: '📄', roles: ALL },
   { label: 'Examination',           icon: '🏆', children: [
     { label: 'Exams',         href: '/exams'     },
@@ -42,6 +44,7 @@ const NAV: NavItem[] = [
     { label: 'Awards',         href: '/awards', roles: ALL },
   ]},
   { label: 'Communication',         href: '/communications',        icon: '💬' },
+  { label: 'Absent Alerts',         href: '/absent-alerts',         icon: '📵', roles: ADMIN },
   { label: 'Online Survey',         href: '/surveys',               icon: '🗳', roles: ALL },
   { label: 'Suggestion Box',        href: '/suggestions',           icon: '💡', roles: ALL },
   { label: 'Manage Activities',     href: '/activities',            icon: '🎭' },

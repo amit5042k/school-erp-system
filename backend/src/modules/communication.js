@@ -189,7 +189,7 @@ function setMembers(groupId, kind, memberIds) {
 
 /* ---------- Sending ---------- */
 function preview(req, res) {
-  const channel = req.body.channel === 'email' ? 'email' : 'sms';
+  const channel = ['sms', 'email', 'whatsapp'].includes(req.body.channel) ? req.body.channel : 'sms';
   const { rows } = resolveTarget(req.body.target);
   const { recipients, missing } = recipientsFor(channel, rows);
   res.json({ channel, configured: messaging.status()[channel], total: rows.length, missing, recipients });
@@ -199,7 +199,7 @@ async function send(req, res, next) {
   try {
     const { channel, target, subject } = req.body || {};
     const body = String(req.body.body || '').trim();
-    if (!['sms', 'email'].includes(channel)) return res.status(400).json({ error: 'channel must be sms or email' });
+    if (!['sms', 'email', 'whatsapp'].includes(channel)) return res.status(400).json({ error: 'channel must be sms, email or whatsapp' });
     if (!body) return res.status(400).json({ error: 'Message is required' });
     if (body.length > 1000) return res.status(400).json({ error: 'Message is too long (max 1000 characters)' });
     if (channel === 'email' && !String(subject || '').trim()) return res.status(400).json({ error: 'Subject is required for email' });
@@ -282,8 +282,9 @@ const sentBox = {
       SELECT channel, status, COUNT(*) AS c FROM message_log
       WHERE created_at >= datetime('now', ?) ${own ? 'AND sent_by = ?' : ''} GROUP BY channel, status`)
       .all(`-${days} days`, ...(own ? [req.user.id] : []));
-    const out = { days, configured: messaging.status(), sms: { sent: 0, failed: 0, not_configured: 0 }, email: { sent: 0, failed: 0, not_configured: 0 } };
-    for (const r of rows) out[r.channel][r.status] = r.c;
+    const blank = () => ({ sent: 0, failed: 0, not_configured: 0 });
+    const out = { days, configured: messaging.status(), sms: blank(), email: blank(), whatsapp: blank() };
+    for (const r of rows) (out[r.channel] ||= blank())[r.status] = r.c;
     out.batches = db.prepare(`SELECT COUNT(DISTINCT batch_id) AS c FROM message_log WHERE created_at >= datetime('now', ?) ${own ? 'AND sent_by = ?' : ''}`)
       .get(`-${days} days`, ...(own ? [req.user.id] : [])).c;
     res.json(out);
