@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { t as tr } from '@/lib/i18n';
 
 export type Action = {
   label: string;
@@ -50,13 +51,13 @@ export default function ExploreOptions({
   return (
     <div>
       {breadcrumb && breadcrumb.length > 0 && (
-        <div className="text-xs text-gray-500 mb-1">{breadcrumb.join(' › ')}</div>
+        <div className="text-xs text-gray-500 mb-1">{breadcrumb.map(b => tr(b)).join(' › ')}</div>
       )}
 
       <div className="flex flex-wrap items-baseline gap-3 mb-4">
         <span className="text-brand-600 text-2xl leading-none">{icon}</span>
-        <h2 className="text-xl font-bold text-brand-700">{title}</h2>
-        <span className="text-sm text-gray-500">{subtitle}</span>
+        <h2 className="text-xl font-bold text-brand-700">{tr(title)}</h2>
+        <span className="text-sm text-gray-500">{tr(subtitle)}</span>
       </div>
 
       {tabs && tabs.length > 0 && (
@@ -71,7 +72,7 @@ export default function ExploreOptions({
                   : 'border-transparent text-gray-600 hover:text-brand-600'
               }`}
             >
-              {t.label}
+              {tr(t.label)}
             </Link>
           ))}
         </div>
@@ -82,7 +83,7 @@ export default function ExploreOptions({
           <div key={g.title || `g${i}`} className="card p-0 overflow-hidden">
             {g.title && (
               <div className="bg-brand-700 text-white text-xs font-semibold px-3 py-2">
-                {g.title}
+                {tr(g.title)}
               </div>
             )}
             <ul className="divide-y">
@@ -91,10 +92,10 @@ export default function ExploreOptions({
                   <>
                     <span className="flex items-center gap-2">
                       <span className="text-brand-600">▸</span>
-                      <span>{a.label}</span>
+                      <span>{tr(a.label)}</span>
                     </span>
                     <span className="text-xs text-gray-400">
-                      {a.href ? 'Open' : 'Report'}
+                      {tr(a.href ? 'Open' : 'Report')}
                     </span>
                   </>
                 );

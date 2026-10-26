@@ -7,6 +7,7 @@ import { api, clearSession, getStoredUser, getToken, setUser } from '@/lib/api';
 import { levelFor, type Perms } from '@/lib/permissions';
 import NativeBridge, { unregisterPush } from '@/components/NativeBridge';
 import ChildSwitcher from '@/components/ChildSwitcher';
+import { LANGS, getLang, setLang, t, type Lang } from '@/lib/i18n';
 
 /**
  * Sidebar configuration.
@@ -141,7 +142,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   async function logout() { await unregisterPush().catch(() => {}); clearSession(); router.replace('/login'); }
 
-  if (!user) return <div className="min-h-screen grid place-items-center text-gray-500">Loading…</div>;
+  if (!user) return <div className="min-h-screen grid place-items-center text-gray-500">{t('Loading…')}</div>;
 
   return (
     <div id="wrapper" className={showNav ? 'show-nav' : ''}>
@@ -170,7 +171,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                       }`}
                     >
                       <span className="w-5 text-center">{item.icon}</span>
-                      <span className="flex-1">{item.label}</span>
+                      <span className="flex-1">{t(item.label)}</span>
                       <span className="text-xs opacity-60">{expanded ? '▾' : '▸'}</span>
                     </button>
                     {expanded && (
@@ -184,7 +185,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                                 isActive(c.href, pathname) ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-brand-50'
                               }`}
                             >
-                              {c.label}
+                              {t(c.label)}
                             </Link>
                           </li>
                         ))}
@@ -204,7 +205,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                     }`}
                   >
                     <span className="w-5 text-center">{item.icon}</span>
-                    <span>{item.label}</span>
+                    <span>{t(item.label)}</span>
                   </Link>
                 </li>
               );
@@ -219,20 +220,20 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <button className="toggle-nav" onClick={(e) => { e.stopPropagation(); setShowNav(v => !v); }}>☰</button>
             <div className="flex-1 min-w-0">
               <h1 className="font-bold leading-tight truncate">School ERP</h1>
-              <p className="text-xs opacity-80 truncate">School Management System</p>
+              <p className="text-xs opacity-80 truncate">{t('School Management System')}</p>
             </div>
 
             <div className="hidden md:flex items-center gap-3 text-sm">
-              <Link href="/announcements" className="opacity-90 hover:opacity-100">Circulars</Link>
-              <Link href="/birthdays" className="opacity-90 hover:opacity-100">Birthdays</Link>
+              <Link href="/announcements" className="opacity-90 hover:opacity-100">{t('Circulars')}</Link>
+              <Link href="/birthdays" className="opacity-90 hover:opacity-100">{t('Birthdays')}</Link>
 
               <ChildSwitcher />
               {session && ((user.baseRole || user.role) === 'admin' || user.perms?.administration === 'full' ? (
                 <Link href="/settings" className="bg-brand-600 text-white text-xs rounded px-2 py-1 border border-brand-500" title="Change the academic session in Settings › School Settings">
-                  Session {session}
+                  {t('Session')} {session}
                 </Link>
               ) : (
-                <span className="bg-brand-600 text-white text-xs rounded px-2 py-1 border border-brand-500">Session {session}</span>
+                <span className="bg-brand-600 text-white text-xs rounded px-2 py-1 border border-brand-500">{t('Session')} {session}</span>
               ))}
             </div>
 
@@ -240,7 +241,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <button
                 className="relative text-xl px-2"
                 onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === 'notif' ? null : 'notif'); }}
-                title="Notifications"
+                title={t('Notifications')}
               >
                 🔔
                 {notif.total > 0 && (
@@ -249,13 +250,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               </button>
               {menuOpen === 'notif' && (
                 <div className="absolute right-0 mt-2 w-64 bg-white text-gray-700 rounded shadow-lg border text-sm z-50">
-                  <div className="px-3 py-2 border-b bg-brand-50 font-semibold text-brand-700">Notifications</div>
+                  <div className="px-3 py-2 border-b bg-brand-50 font-semibold text-brand-700">{t('Notifications')}</div>
                   {notif.items.map(i => (
                     <Link key={i.key} href={i.href} onClick={() => setMenuOpen(null)} className="flex justify-between px-3 py-2 hover:bg-brand-50 border-b last:border-b-0">
-                      <span>{i.label}</span><span className={`badge ${i.count ? `badge-${i.tone}` : 'badge-gray'}`}>{i.count}</span>
+                      <span>{t(i.label)}</span><span className={`badge ${i.count ? `badge-${i.tone}` : 'badge-gray'}`}>{i.count}</span>
                     </Link>
                   ))}
-                  {!notif.items.length && <div className="px-3 py-2 text-gray-500">Nothing new.</div>}
+                  {!notif.items.length && <div className="px-3 py-2 text-gray-500">{t('Nothing new.')}</div>}
                 </div>
               )}
             </div>
@@ -267,17 +268,26 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               >
                 <div className="hidden sm:block text-right">
                   <div className="font-semibold leading-tight">{user.fullName}</div>
-                  <div className="opacity-80 text-[11px] capitalize">{user.roleName || (user.role === 'admin' ? 'Super Admin' : user.role)}</div>
+                  <div className="opacity-80 text-[11px] capitalize">{t(user.roleName || (user.role === 'admin' ? 'Super Admin' : user.role === 'parent' ? 'Parent' : user.role === 'student' ? 'Student' : user.role))}</div>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-white text-brand-700 grid place-items-center font-bold">
                   {(user.fullName || '?').split(' ').map((w: string) => w[0]).slice(0, 2).join('')}
                 </div>
               </button>
               {menuOpen === 'user' && (
-                <div className="absolute right-0 mt-2 w-44 bg-white text-gray-700 rounded shadow-lg border text-sm z-50">
-                  <Link href="/change-password" className="block px-3 py-2 hover:bg-brand-50 border-b">Change Password</Link>
-                  <Link href="/settings" className="block px-3 py-2 hover:bg-brand-50 border-b">My Profile</Link>
-                  <button onClick={logout} className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50">Logout</button>
+                <div className="absolute right-0 mt-2 w-56 bg-white text-gray-700 rounded shadow-lg border text-sm z-50">
+                  <Link href="/change-password" className="block px-3 py-2 hover:bg-brand-50 border-b">{t('Change Password')}</Link>
+                  <Link href="/settings" className="block px-3 py-2 hover:bg-brand-50 border-b">{t('My Profile')}</Link>
+                  <div className="px-3 py-2 border-b">
+                    <div className="text-[11px] text-gray-500 mb-1">{t('Language')}</div>
+                    <div className="flex gap-1">
+                      {LANGS.map(l => (
+                        <button key={l.key} onClick={() => setLang(l.key as Lang)}
+                          className={`px-1.5 py-0.5 rounded text-xs border ${getLang() === l.key ? 'bg-brand-600 text-white border-brand-600' : 'hover:bg-brand-50'}`}>{l.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <button onClick={logout} className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50">{t('Logout')}</button>
                 </div>
               )}
             </div>
@@ -289,7 +299,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <footer className="bg-white border-t">
           <div className="px-4 py-3 text-xs text-gray-500 flex justify-between">
             <div>© {new Date().getFullYear()} School ERP</div>
-            <div>School Management System</div>
+            <div>{t('School Management System')}</div>
           </div>
         </footer>
       </div>

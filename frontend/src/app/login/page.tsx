@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, setToken, setUser } from '@/lib/api';
+import { LANGS, getLang, setLang, t } from '@/lib/i18n';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,7 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('expired')) setError('Your session has expired. Please sign in again.');
+    if (new URLSearchParams(window.location.search).get('expired')) setError(t('Your session has expired. Please sign in again.'));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -30,7 +31,7 @@ export default function LoginPage() {
       // The Android app opens on the phone-first Home screen; the website keeps the full dashboard.
       router.push(typeof navigator !== 'undefined' && navigator.userAgent.includes('SchoolERP-App') ? '/home' : '/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || t('Login failed'));
     } finally {
       setLoading(false);
     }
@@ -49,7 +50,7 @@ export default function LoginPage() {
               SCHOOL ERP
             </h1>
             <p className="text-xs sm:text-sm text-gray-600">
-              School Management System &nbsp;|&nbsp; Excellence in Education
+              {t('School Management System')} &nbsp;|&nbsp; {t('Excellence in Education')}
             </p>
           </div>
           <div className="hidden sm:block text-right">
@@ -64,47 +65,46 @@ export default function LoginPage() {
         <div className="w-full max-w-4xl grid md:grid-cols-2 bg-white rounded-xl shadow-2xl overflow-hidden">
           {/* Left panel */}
           <div className="hidden md:flex flex-col justify-center bg-gradient-to-br from-brand-700 to-brand-500 text-white p-10">
-            <h2 className="text-3xl font-bold mb-3">Welcome Back</h2>
+            <h2 className="text-3xl font-bold mb-3">{t('Welcome Back')}</h2>
             <p className="opacity-90 mb-6 leading-relaxed">
-              Sign in to the School ERP portal to access academic records,
-              attendance, fee payments, timetable and announcements.
+              {t('Sign in to the School ERP portal to access academic records, attendance, fee payments, timetable and announcements.')}
             </p>
             <ul className="space-y-2 text-sm opacity-95">
-              <li>✓ Student &amp; Parent portal</li>
-              <li>✓ Teacher &amp; Staff dashboard</li>
-              <li>✓ Online attendance and fee management</li>
-              <li>✓ Timetable &amp; circular notices</li>
+              <li>✓ {t('Student & Parent portal')}</li>
+              <li>✓ {t('Teacher & Staff dashboard')}</li>
+              <li>✓ {t('Online attendance and fee management')}</li>
+              <li>✓ {t('Timetable & circular notices')}</li>
             </ul>
             <div className="mt-8 text-xs opacity-75 border-t border-white/20 pt-4">
-              For login issues, contact the school office (Mon–Sat, 9:00 AM – 3:00 PM).
+              {t('For login issues, contact the school office (Mon–Sat, 9:00 AM – 3:00 PM).')}
             </div>
           </div>
 
           {/* Form panel */}
           <div className="p-8 sm:p-10">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold text-brand-700">User Login</h2>
-              <p className="text-sm text-gray-600">Please enter your credentials to continue.</p>
+              <h2 className="text-2xl font-bold text-brand-700">{t('User Login')}</h2>
+              <p className="text-sm text-gray-600">{t('Please enter your credentials to continue.')}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="label" htmlFor="role">Login As</label>
+                <label className="label" htmlFor="role">{t('Login As')}</label>
                 <select id="role" className="input" value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="admin">Administration / Office</option>
-                  <option value="teacher">Teacher / Staff</option>
-                  <option value="student">Student</option>
-                  <option value="parent">Parent</option>
+                  <option value="admin">{t('Administration / Office')}</option>
+                  <option value="teacher">{t('Teacher / Staff')}</option>
+                  <option value="student">{t('Student')}</option>
+                  <option value="parent">{t('Parent')}</option>
                 </select>
               </div>
 
               <div>
-                <label className="label" htmlFor="username">User ID</label>
+                <label className="label" htmlFor="username">{t('User ID')}</label>
                 <input
                   id="username"
                   type="text"
                   className="input"
-                  placeholder="Enter User ID / Admission No."
+                  placeholder={t('Enter User ID / Admission No.')}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
@@ -113,12 +113,12 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="label" htmlFor="password">Password</label>
+                <label className="label" htmlFor="password">{t('Password')}</label>
                 <input
                   id="password"
                   type="password"
                   className="input"
-                  placeholder="Enter password"
+                  placeholder={t('Enter password')}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
@@ -135,18 +135,25 @@ export default function LoginPage() {
               <div className="flex items-center justify-between text-sm">
                 <label className="inline-flex items-center gap-2">
                   <input type="checkbox" className="rounded border-gray-300" />
-                  <span>Remember me</span>
+                  <span>{t('Remember me')}</span>
                 </label>
-                <a href="#" className="text-brand-600 hover:underline">Forgot password?</a>
+                <a href="#" className="text-brand-600 hover:underline">{t('Forgot password?')}</a>
               </div>
 
               <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-                {loading ? 'Signing in…' : 'Sign In'}
+                {loading ? t('Signing in…') : t('Sign In')}
               </button>
             </form>
 
+            <div className="mt-4 flex justify-center gap-2 text-xs" aria-label="Language">
+              {LANGS.map(l => (
+                <button key={l.key} type="button" onClick={() => setLang(l.key)}
+                  className={`px-2 py-1 rounded border ${getLang() === l.key ? 'bg-brand-600 text-white border-brand-600' : 'text-gray-600 hover:bg-brand-50'}`}>{l.label}</button>
+              ))}
+            </div>
+
             <div className="mt-6 border-t pt-4">
-              <p className="text-xs text-gray-500 mb-2">Demo credentials</p>
+              <p className="text-xs text-gray-500 mb-2">{t('Demo credentials')}</p>
               <div className="text-xs text-gray-700 space-y-1">
                 <div><b>Admin:</b> admin / admin123</div>
                 <div><b>Teacher:</b> ritu / teacher123</div>

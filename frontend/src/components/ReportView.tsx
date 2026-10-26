@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { api, downloadCsv, fmtDate, fmtMoney, sessionList } from '@/lib/api';
+import { t as tr } from '@/lib/i18n';
 
 export type ReportParam = {
   name: string; label?: string; required?: boolean; default?: string;
@@ -69,24 +70,24 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
     const opt = (o: any) => (typeof o === 'string' ? { value: o, label: o } : o);
     if (p.type === 'class') return (
       <select className="input" value={v} onChange={e => set(e.target.value)}>
-        <option value="">All Classes</option>
+        <option value="">{tr('All Classes')}</option>
         {lookups.classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.section}</option>)}
       </select>);
     if (p.type === 'student') return (
       <select className="input" value={v} onChange={e => set(e.target.value)}>
-        <option value="">{p.required ? '-- Select --' : 'All Students'}</option>
+        <option value="">{tr(p.required ? '-- Select --' : 'All Students')}</option>
         {lookups.students.map(s => <option key={s.id} value={s.id}>{s.admission_no} — {s.full_name}</option>)}
       </select>);
     if (p.type === 'teacher') return (
       <select className="input" value={v} onChange={e => set(e.target.value)}>
-        <option value="">{p.required ? '-- Select --' : 'All Staff'}</option>
+        <option value="">{tr(p.required ? '-- Select --' : 'All Staff')}</option>
         {lookups.teachers.map(t => <option key={t.id} value={t.id}>{t.employee_no} — {t.full_name}</option>)}
       </select>);
     if (p.type === 'select' || p.type === 'session') {
       const options = p.type === 'session' ? sessions : p.options || [];
       return (
         <select className="input" value={v} onChange={e => set(e.target.value)}>
-          {!p.required && <option value="">All</option>}
+          {!p.required && <option value="">{tr('All')}</option>}
           {options.map(o => { const x = opt(o); return <option key={x.value} value={x.value}>{x.label}</option>; })}
         </select>);
     }
@@ -98,14 +99,14 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
         <div>
-          <div className="text-xs text-gray-500 no-print">Reports › {res?.group || '…'}</div>
-          <h2 className="text-xl font-bold text-brand-700">{res?.title || 'Report'}</h2>
+          <div className="text-xs text-gray-500 no-print">{tr('Reports')} › {res?.group ? tr(res.group) : '…'}</div>
+          <h2 className="text-xl font-bold text-brand-700">{tr(res?.title || 'Report')}</h2>
           {res?.description && <div className="text-sm text-gray-500">{res.description}</div>}
         </div>
         {res && (
           <div className="flex gap-2 no-print">
-            <button className="btn btn-accent text-sm" onClick={() => downloadCsv(`${res.key}-${new Date().toISOString().slice(0, 10)}`, res.columns, res.rows)}>Download Excel</button>
-            <button className="btn bg-gray-200 text-sm" onClick={() => window.print()}>Print</button>
+            <button className="btn btn-accent text-sm" onClick={() => downloadCsv(`${res.key}-${new Date().toISOString().slice(0, 10)}`, res.columns, res.rows)}>{tr('Download Excel')}</button>
+            <button className="btn bg-gray-200 text-sm" onClick={() => window.print()}>{tr('Print')}</button>
           </div>
         )}
       </div>
@@ -113,9 +114,9 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
       {res && res.params.length > 0 && (
         <form className="card p-4 my-4 grid md:grid-cols-4 gap-3 text-sm no-print" onSubmit={e => { e.preventDefault(); run(); }}>
           {res.params.map(p => (
-            <div key={p.name}><label className="label">{p.label || p.name}{p.required ? ' *' : ''}</label>{input(p)}</div>
+            <div key={p.name}><label className="label">{tr(p.label || p.name)}{p.required ? ' *' : ''}</label>{input(p)}</div>
           ))}
-          <div className="flex items-end"><button className="btn btn-primary" disabled={busy}>{busy ? 'Loading…' : 'Search'}</button></div>
+          <div className="flex items-end"><button className="btn btn-primary" disabled={busy}>{tr(busy ? 'Loading…' : 'Search')}</button></div>
         </form>
       )}
       {res && res.params.length > 0 && (
@@ -128,20 +129,20 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
 
       {res && (
         <div className="card p-4 overflow-x-auto">
-          <div className="text-xs text-gray-500 mb-2">{res.rows.length} record(s)</div>
+          <div className="text-xs text-gray-500 mb-2">{res.rows.length} {tr('record(s)')}</div>
           <table className="table min-w-max">
-            <thead><tr>{res.columns.map(c => <th key={c.key} className={c.type && c.type !== 'text' && c.type !== 'date' ? 'text-right' : ''}>{c.label}</th>)}</tr></thead>
+            <thead><tr>{res.columns.map(c => <th key={c.key} className={c.type && c.type !== 'text' && c.type !== 'date' ? 'text-right' : ''}>{tr(c.label)}</th>)}</tr></thead>
             <tbody>
               {res.rows.map((r, i) => (
                 <tr key={i}>{res.columns.map(c => (
                   <td key={c.key} className={c.type && c.type !== 'text' && c.type !== 'date' ? 'text-right' : ''}>{cell(r[c.key], c)}</td>
                 ))}</tr>
               ))}
-              {!res.rows.length && <tr><td colSpan={res.columns.length} className="text-center py-4 text-gray-500">No records for these filters.</td></tr>}
+              {!res.rows.length && <tr><td colSpan={res.columns.length} className="text-center py-4 text-gray-500">{tr('No records for these filters.')}</td></tr>}
               {totals && res.rows.length > 0 && (
                 <tr className="font-semibold bg-brand-50">
                   {res.columns.map((c, i) => (
-                    <td key={c.key} className={c.total ? 'text-right' : ''}>{c.total ? cell(totals[c.key], c) : i === 0 ? 'Total' : ''}</td>
+                    <td key={c.key} className={c.total ? 'text-right' : ''}>{c.total ? cell(totals[c.key], c) : i === 0 ? tr('Total') : ''}</td>
                   ))}
                 </tr>
               )}

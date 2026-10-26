@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
+import { t } from '@/lib/i18n';
 import { api, fileUrl, upload } from '@/lib/api';
 
 export type FieldDef = {
@@ -80,7 +81,7 @@ export default function ModulePage({
   }
 
   async function remove(id: number) {
-    if (!confirm('Delete this record?')) return;
+    if (!confirm(t('Delete this record?'))) return;
     try { await api(`${endpoint}/${id}`, { method: 'DELETE' }); load(); }
     catch (e: any) { setError(e.message); }
   }
@@ -89,7 +90,7 @@ export default function ModulePage({
     const v = row[f.name];
     if (f.formatter) return f.formatter(v, row);
     if (v == null || v === '') return '—';
-    if (f.type === 'file') return <a href={fileUrl(v)} target="_blank" rel="noreferrer" className="text-brand-600 underline">View</a>;
+    if (f.type === 'file') return <a href={fileUrl(v)} target="_blank" rel="noreferrer" className="text-brand-600 underline">{t('View')}</a>;
     if (f.type === 'select') return f.options?.find(o => String(o.value) === String(v))?.label ?? v;
     return v;
   }
@@ -101,8 +102,8 @@ export default function ModulePage({
   return (
     <Shell>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-brand-700">{title}</h2>
-        {canCreate && <button className="btn btn-primary text-sm" onClick={() => { if (adding) { setForm(initial); setEditId(null); } setAdding(v => !v); }}>{adding ? 'Cancel' : createLabel}</button>}
+        <h2 className="text-xl font-bold text-brand-700">{t(title)}</h2>
+        {canCreate && <button className="btn btn-primary text-sm" onClick={() => { if (adding) { setForm(initial); setEditId(null); } setAdding(v => !v); }}>{t(adding ? 'Cancel' : createLabel)}</button>}
       </div>
 
       {children}
@@ -111,20 +112,20 @@ export default function ModulePage({
         <form onSubmit={submit} className="card p-4 mb-4 grid md:grid-cols-3 gap-3 text-sm">
           {formFields.map(f => (
             <div key={f.name} className={f.type === 'textarea' ? 'md:col-span-3' : ''}>
-              <label className="label">{f.label}{f.required ? ' *' : ''}</label>
+              <label className="label">{t(f.label)}{f.required ? ' *' : ''}</label>
               {f.type === 'textarea' ? (
                 <textarea className="input" rows={3} required={f.required}
                   value={form[f.name] ?? ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })} />
               ) : f.type === 'select' ? (
                 <select className="input" required={f.required}
                   value={form[f.name] ?? ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })}>
-                  <option value="">-- Select --</option>
+                  <option value="">{t('-- Select --')}</option>
                   {(f.options || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               ) : f.type === 'file' ? (
                 <div>
                   <input className="input" type="file" disabled={uploading} onChange={e => pickFile(f.name, e.target.files)} />
-                  {form[f.name] && <a className="text-xs text-brand-600 underline" href={fileUrl(form[f.name])} target="_blank" rel="noreferrer">Current file</a>}
+                  {form[f.name] && <a className="text-xs text-brand-600 underline" href={fileUrl(form[f.name])} target="_blank" rel="noreferrer">{t('Current file')}</a>}
                 </div>
               ) : (
                 <input className="input" type={f.type || 'text'} required={f.required}
@@ -133,20 +134,20 @@ export default function ModulePage({
               )}
             </div>
           ))}
-          <div className="md:col-span-3"><button className="btn btn-primary" disabled={uploading}>{editId ? 'Save Changes' : 'Save'}</button></div>
+          <div className="md:col-span-3"><button className="btn btn-primary" disabled={uploading}>{t(editId ? 'Save Changes' : 'Save')}</button></div>
         </form>
       )}
 
       {searchKeys.length > 0 && (
-        <div className="mb-3"><input className="input max-w-xs" placeholder="Search…" value={q} onChange={e => setQ(e.target.value)} /></div>
+        <div className="mb-3"><input className="input max-w-xs" placeholder={t('Search…')} value={q} onChange={e => setQ(e.target.value)} /></div>
       )}
 
       <div className="card p-4 overflow-x-auto">
         {error && <div className="text-red-700 text-sm mb-2">{error}</div>}
         <table className="table min-w-max">
           <thead><tr>
-            {visibleFields.map(f => <th key={f.name}>{f.label}</th>)}
-            {(rowActions || canEdit || (canCreate && canDelete)) && <th>Actions</th>}
+            {visibleFields.map(f => <th key={f.name}>{t(f.label)}</th>)}
+            {(rowActions || canEdit || (canCreate && canDelete)) && <th>{t('Actions')}</th>}
           </tr></thead>
           <tbody>
             {filtered.map(row => (
@@ -154,15 +155,15 @@ export default function ModulePage({
                 {visibleFields.map(f => <td key={f.name}>{display(f, row)}</td>)}
                 {(rowActions || canEdit || (canCreate && canDelete)) && (
                   <td className="whitespace-nowrap">
-                    {canEdit && <button onClick={() => startEdit(row)} className="text-xs text-brand-600 hover:underline mr-2">Edit</button>}
+                    {canEdit && <button onClick={() => startEdit(row)} className="text-xs text-brand-600 hover:underline mr-2">{t('Edit')}</button>}
                     {rowActions ? rowActions(row, load) : canCreate && canDelete && (
-                      <button onClick={() => remove(row.id)} className="text-xs text-red-600 hover:underline">Delete</button>
+                      <button onClick={() => remove(row.id)} className="text-xs text-red-600 hover:underline">{t('Delete')}</button>
                     )}
                   </td>
                 )}
               </tr>
             ))}
-            {!filtered.length && <tr><td colSpan={visibleFields.length + 1} className="text-center py-4 text-gray-500">{emptyText}</td></tr>}
+            {!filtered.length && <tr><td colSpan={visibleFields.length + 1} className="text-center py-4 text-gray-500">{t(emptyText)}</td></tr>}
           </tbody>
         </table>
       </div>

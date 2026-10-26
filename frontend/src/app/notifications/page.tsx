@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, fmtDateTime } from '@/lib/api';
+import { t } from '@/lib/i18n';
 
 type Item = { id: number; title: string; body: string; link: string | null; kind: string | null; read_at: string | null; created_at: string };
 
@@ -28,8 +29,8 @@ export default function NotificationsPage() {
     <Shell>
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-brand-700">Notifications</h2>
-          {!!data?.unread && <button className="text-sm text-brand-600 hover:underline" onClick={readAll}>Mark all as read</button>}
+          <h2 className="text-xl font-bold text-brand-700">{t('Notifications')}</h2>
+          {!!data?.unread && <button className="text-sm text-brand-600 hover:underline" onClick={readAll}>{t('Mark all as read')}</button>}
         </div>
         {err && <div className="text-red-700 text-sm mb-3">{err}</div>}
         <div className="card p-0 overflow-hidden">
@@ -46,8 +47,8 @@ export default function NotificationsPage() {
               <div className="text-sm text-gray-600 mt-0.5">{n.body}</div>
             </button>
           ))}
-          {data && !data.items.length && <div className="px-4 py-8 text-center text-sm text-gray-500">No notifications yet. Updates about attendance, fees, results, notices and leave will appear here.</div>}
-          {!data && !err && <div className="px-4 py-8 text-center text-sm text-gray-500">Loading…</div>}
+          {data && !data.items.length && <div className="px-4 py-8 text-center text-sm text-gray-500">{t('No notifications yet. Updates about attendance, fees, results, notices and leave will appear here.')}</div>}
+          {!data && !err && <div className="px-4 py-8 text-center text-sm text-gray-500">{t('Loading…')}</div>}
         </div>
       </div>
     </Shell>

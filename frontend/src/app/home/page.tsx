@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, fmtDateTime, fmtMoney, getStoredUser, localDate } from '@/lib/api';
+import { t as tr } from '@/lib/i18n';
 
 type Level = 'none' | 'standard' | 'full';
 type User = {
@@ -115,15 +116,15 @@ export default function HomePage() {
     loadStats(profile, user!).then(setStats).catch(() => setStats([]));
   }, [profile, user]);
 
-  if (!user) return <Shell><div className="text-gray-500">Loading…</div></Shell>;
+  if (!user) return <Shell><div className="text-gray-500">{tr('Loading…')}</div></Shell>;
 
   return (
     <Shell>
       <div className="max-w-3xl mx-auto">
         <div className="mb-4">
-          <div className="text-sm text-gray-500">{greeting()},</div>
-          <h1 className="text-2xl font-bold text-brand-700 leading-tight">{user.fullName || 'Welcome'}</h1>
-          <div className="text-xs text-gray-500 mt-0.5">{user.roleName || roleLabel(profile!)}</div>
+          <div className="text-sm text-gray-500">{tr(greeting() + ',')}</div>
+          <h1 className="text-2xl font-bold text-brand-700 leading-tight">{user.fullName || tr('Welcome')}</h1>
+          <div className="text-xs text-gray-500 mt-0.5">{tr(user.roleName || roleLabel(profile!))}</div>
         </div>
 
         {stats.length > 0 && (
@@ -131,7 +132,7 @@ export default function HomePage() {
             {stats.map(s => {
               const body = (
                 <div className={`rounded-xl p-3 text-white shadow-sm ${s.tone}`}>
-                  <div className="text-[11px] uppercase tracking-wide opacity-90">{s.label}</div>
+                  <div className="text-[11px] uppercase tracking-wide opacity-90">{tr(s.label)}</div>
                   <div className="text-xl font-bold mt-0.5">{s.value}</div>
                 </div>
               );
@@ -145,7 +146,7 @@ export default function HomePage() {
             <Link key={t.label} href={t.href}
               className="bg-white rounded-2xl border border-gray-100 shadow-sm active:scale-95 transition p-3 flex flex-col items-center justify-center text-center min-h-[96px]">
               <span className="text-3xl leading-none mb-2" aria-hidden>{t.icon}</span>
-              <span className="text-[13px] font-medium text-gray-700 leading-tight">{t.label}</span>
+              <span className="text-[13px] font-medium text-gray-700 leading-tight">{tr(t.label)}</span>
             </Link>
           ))}
         </div>
@@ -153,9 +154,9 @@ export default function HomePage() {
         <div className="card p-0 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h2 className="font-semibold text-brand-700">
-              Notifications {inbox.unread > 0 && <span className="badge badge-amber ml-1">{inbox.unread} new</span>}
+              {tr('Notifications')} {inbox.unread > 0 && <span className="badge badge-amber ml-1">{inbox.unread} {tr('new')}</span>}
             </h2>
-            <Link href="/notifications" className="text-sm text-brand-600">See all</Link>
+            <Link href="/notifications" className="text-sm text-brand-600">{tr('See all')}</Link>
           </div>
           {inbox.items.map(n => (
             <Link key={n.id} href={n.link || '/notifications'} onClick={() => { if (!n.read_at) api(`/push/inbox/${n.id}/read`, { method: 'POST' }).catch(() => {}); }}
@@ -167,7 +168,7 @@ export default function HomePage() {
               <div className="text-sm text-gray-600 mt-0.5">{n.body}</div>
             </Link>
           ))}
-          {!inbox.items.length && <div className="px-4 py-6 text-center text-sm text-gray-500">No notifications yet.</div>}
+          {!inbox.items.length && <div className="px-4 py-6 text-center text-sm text-gray-500">{tr('No notifications yet.')}</div>}
         </div>
       </div>
     </Shell>
