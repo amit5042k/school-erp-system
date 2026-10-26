@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { api, clearSession, getStoredUser, getToken, setUser } from '@/lib/api';
-import { levelFor, type Perms } from '@/lib/permissions';
+import { areaForPage, isSelf, levelFor, type Perms } from '@/lib/permissions';
+import LicenceBanner, { useLicence } from '@/components/LicenceBanner';
 import NativeBridge, { unregisterPush } from '@/components/NativeBridge';
 import ChildSwitcher from '@/components/ChildSwitcher';
 import { LANGS, getLang, setLang, t, type Lang } from '@/lib/i18n';
@@ -31,6 +32,7 @@ const NAV: NavItem[] = [
   { label: 'Attendance',            href: '/attendance',            icon: '✓' },
   { label: 'Finance',               href: '/fees',                  icon: '₹', roles: ['admin', 'student', 'parent'] },
   { label: 'Online Payments',       href: '/payments',              icon: '💳', roles: ADMIN },
+  { label: 'Accounts',              href: '/accounts',              icon: '📒', roles: ADMIN },
   { label: 'Documents',             href: '/documents',             icon: '📄', roles: ALL },
   { label: 'Examination',           icon: '🏆', children: [
     { label: 'Exams',         href: '/exams'     },
@@ -72,9 +74,12 @@ const NAV: NavItem[] = [
 ];
 
 
-function navFor(role: Role, perms?: Perms | null): NavItem[] {
+function navFor(role: Role, perms?: Perms | null, planAreas?: string[] | null): NavItem[] {
   // Staff roles (principal, accountant, ...) see what their role's areas allow; others go by the item's roles.
   const can = (i: NavItem, inherited?: Role[]) => {
+    // Modules outside the school's licensed plan are hidden for everyone.
+    const area = i.href ? areaForPage(i.href) : null;
+    if (planAreas && area && !planAreas.includes(area) && !isSelf(i.href!)) return false;
     const allowed = i.roles || inherited || ['admin', 'teacher'];
     if (perms && role === 'teacher') {
       if (!i.href) return true;
@@ -107,6 +112,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [notif, setNotif] = useState<{ total: number; items: { key: string; label: string; count: number; href: string; tone: string }[] }>({ total: 0, items: [] });
   const [menuOpen, setMenuOpen] = useState<'user' | 'notif' | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const licence = useLicence();
 
   useEffect(() => {
     const u = getStoredUser<any>();
@@ -157,7 +163,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="p-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
           <ul className="sidenav">
-            {navFor(user.baseRole || user.role, user.perms).map(item => {
+            {navFor(user.baseRole || user.role, user.perms, licence?.areas).map(item => {
               if (item.children) {
                 const expanded = openGroup === item.label;
                 const anyActive = item.children.some(c => isActive(c.href, pathname));
@@ -294,6 +300,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        <LicenceBanner licence={licence} />
         <main className="flex-1 px-4 py-6">{children}</main>
 
         <footer className="bg-white border-t">

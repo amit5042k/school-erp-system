@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>School ERP · Platform Console</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="login" class="login hidden">
+    <form id="loginForm" class="card narrow">
+      <h1>Platform Console</h1>
+      <p class="muted">Sign in to manage schools and licences.</p>
+      <label>Email<input name="email" type="email" required autocomplete="username"></label>
+      <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
+      <div id="loginErr" class="error"></div>
+      <button class="btn primary">Sign in</button>
+    </form>
+  </div>
+
+  <div id="app" class="hidden">
+    <header>
+      <div class="brand">School ERP <span>Platform</span></div>
+      <nav id="tabs">
+        <button data-tab="dashboard" class="active">Dashboard</button>
+        <button data-tab="schools">Schools</button>
+        <button data-tab="plans">Plans</button>
+        <button data-tab="renewals">Renewals</button>
+        <button data-tab="activity">Activity</button>
+        <button data-tab="system">Server</button>
+      </nav>
+      <div class="who"><span id="ownerName"></span> <button id="logout" class="link">Sign out</button></div>
+    </header>
+    <main>
+      <div id="flash" class="flash hidden"></div>
+      <section id="tab-dashboard"></section>
+      <section id="tab-schools" class="hidden"></section>
+      <section id="tab-plans" class="hidden"></section>
+      <section id="tab-renewals" class="hidden"></section>
+      <section id="tab-activity" class="hidden"></section>
+      <section id="tab-system" class="hidden"></section>
+    </main>
+  </div>
+
+  <dialog id="dlg"><div id="dlgBody"></div></dialog>
+  <script src="/app.js"></script>
+</body>
+</html>

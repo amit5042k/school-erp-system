@@ -17,3 +17,6 @@ backend/data/*.db
 package-lock.json
 backend/uploads/
 backend/data/backups/
+
+# Platform console data (holds the licence signing key)
+platform/data/
