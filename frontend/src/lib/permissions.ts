@@ -11,7 +11,7 @@ const PAGE_AREAS: [string, string][] = [
   ['/homework', 'academic-comm'], ['/academic-comm', 'academic-comm'], ['/activities', 'academic-comm'],
   ['/calendar', 'academic-comm'], ['/surveys', 'academic-comm'], ['/documents', 'academic-comm'],
   ['/communications', 'communication'], ['/comms', 'communication'], ['/announcements', 'communication'],
-  ['/fees', 'finance'], ['/finance', 'finance'], ['/payments', 'finance'],
+  ['/fees', 'finance'], ['/finance', 'finance'], ['/payments', 'finance'], ['/accounts', 'accounts'],
   ['/student-leave', 'attendance'], ['/absent-alerts', 'communication'],
   ['/payroll', 'payroll'],
   ['/teachers', 'hr'], ['/hr', 'hr'], ['/leaves', 'hr'], ['/awards', 'hr'],
@@ -31,7 +31,7 @@ export function areaForPage(pathname: string): string | null {
   return null;
 }
 
-const isSelf = (pathname: string) => SELF_SERVICE.some(p => pathname === p || pathname.startsWith(p + '/'));
+export const isSelf = (pathname: string) => SELF_SERVICE.some(p => pathname === p || pathname.startsWith(p + '/'));
 
 export function levelFor(perms: Perms | null | undefined, pathname: string): Level {
   if (!perms) return 'full';

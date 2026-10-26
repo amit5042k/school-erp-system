@@ -65,9 +65,12 @@ check "IT head can't change own role" "$(code -X POST $B/users/$ITID/role -H "$(
 check "IT head can't edit own role perms" "$(code -X PUT $B/roles/it-head -H "$(H $IT)" -H "$C" -d '{"perms":{"finance":"full"}}')" 403
 check "IT head reads backups list" "$(code $B/admin/backups -H "$(H $IT)")" 200
 check "IT head blocked from fees" "$(code $B/fees -H "$(H $IT)")" 403
+check "accountant opens accounts" "$(code $B/accounts/summary -H "$(H $AC)")" 200
+check "clerk blocked from accounts" "$(code $B/accounts/summary -H "$(H $CL)")" 403
+check "teacher blocked from accounts" "$(code $B/accounts/vouchers -H "$(H $CO)")" 403
 # Principal and role editing
 check "principal sees everything (payroll)" "$(code $B/payroll -H "$(H $P)")" 200
-check "principal lists roles" "$(curl -s $B/roles -H "$(H $P)" | j 'x.roles.length>=8&&x.areas.length===14')" true
+check "principal lists roles" "$(curl -s $B/roles -H "$(H $P)" | j 'x.roles.length>=8&&x.areas.length===15')" true
 check "principal gives clerk finance access" "$(code -X PUT $B/roles/clerk -H "$(H $P)" -H "$C" -d '{"perms":{"finance":"full"}}')" 200
 check "clerk now reads fees (no re-login)" "$(code $B/fees -H "$(H $CL)")" 200
 curl -s -X PUT $B/roles/clerk -H "$(H $P)" -H "$C" -d '{"perms":{"finance":"none"}}' >/dev/null

@@ -53,6 +53,7 @@ export const DICT: Record<string, Entry> = {
   'Roles & Permissions': { hi: 'भूमिकाएँ व अनुमतियाँ', pa: 'ਭੂਮਿਕਾਵਾਂ ਅਤੇ ਇਜਾਜ਼ਤਾਂ' },
   'Bulk Import': { hi: 'थोक आयात', pa: 'ਥੋਕ ਆਯਾਤ' },
   'Backups': { hi: 'बैकअप', pa: 'ਬੈਕਅੱਪ' },
+  'Accounts': { hi: 'लेखा', pa: 'ਲੇਖਾ' },
   'Reports': { hi: 'रिपोर्ट', pa: 'ਰਿਪੋਰਟਾਂ' },
 
   // Header and account

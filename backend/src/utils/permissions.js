@@ -19,6 +19,7 @@ const AREAS = [
   { key: 'academic-comm', label: 'Homework, Diary & Content' },
   { key: 'communication', label: 'SMS, Email & Notices' },
   { key: 'finance', label: 'Fees & Finance' },
+  { key: 'accounts', label: 'Accounts & Vouchers' },
   { key: 'payroll', label: 'Payroll' },
   { key: 'hr', label: 'Human Resource & Leaves' },
   { key: 'library', label: 'Library' },
@@ -48,7 +49,7 @@ const API_AREAS = [
   ['/homework', 'academic-comm'], ['/activities', 'academic-comm'], ['/events', 'academic-comm'],
   ['/surveys', 'academic-comm'], ['/documents', 'academic-comm'],
   ['/communications', 'communication'], ['/messaging', 'communication'], ['/announcements', 'communication'],
-  ['/fees', 'finance'], ['/finance', 'finance'],
+  ['/fees', 'finance'], ['/finance', 'finance'], ['/accounts', 'accounts'],
   ['/payroll', 'payroll'], ['/pay', 'payroll'],
   ['/teachers', 'hr'], ['/hr', 'hr'], ['/leaves', 'hr'], ['/leave-allowances', 'hr'], ['/awards', 'hr'],
   ['/books', 'library'], ['/book-issues', 'library'], ['/lib', 'library'],
@@ -64,7 +65,7 @@ const API_AREAS = [
 // Report group (as shown in Reports) → area, so reports follow the same permissions as their module.
 const REPORT_GROUP_AREAS = {
   'Student': 'students', 'Students': 'students', 'Attendance': 'attendance', 'Examination': 'academics',
-  'Academic Communication': 'academic-comm', 'Communication': 'communication', 'Finance': 'finance',
+  'Academic Communication': 'academic-comm', 'Communication': 'communication', 'Finance': 'finance', 'Accounts': 'accounts',
   'Payroll': 'payroll', 'Human Resource': 'hr', 'Library': 'library', 'Transport': 'transport', 'Hostel': 'hostel',
   'Inventory': 'inventory', 'Front Office': 'front-office', 'Biometric': 'administration',
 };
@@ -89,22 +90,23 @@ const ALL = (level) => Object.fromEntries(AREA_KEYS.map(k => [k, level]));
 const with_ = (base, overrides) => ({ ...base, ...overrides });
 
 // Typical starting points; the principal or IT head can change any of these on the Roles & Permissions page.
+// Books of account are kept to the principal and accountant unless the school opens them up.
 const DEFAULT_ROLES = [
   { key: 'principal', name: 'Principal', perms: ALL('full') },
   { key: 'academic-coordinator', name: 'Academic Coordinator', perms: with_(ALL('standard'), {
     academics: 'full', 'academic-comm': 'full', attendance: 'full', communication: 'full',
-    finance: 'none', payroll: 'none', administration: 'none' }) },
+    finance: 'none', accounts: 'none', payroll: 'none', administration: 'none' }) },
   { key: 'it-head', name: 'IT Head', perms: with_(ALL('standard'), {
-    administration: 'full', finance: 'none', payroll: 'none' }) },
+    administration: 'full', finance: 'none', accounts: 'none', payroll: 'none' }) },
   { key: 'office-superintendent', name: 'Office Superintendent', perms: with_(ALL('standard'), {
     students: 'full', 'front-office': 'full', hr: 'full', communication: 'full', attendance: 'full',
-    transport: 'full', hostel: 'full', inventory: 'full', payroll: 'none', administration: 'none' }) },
+    transport: 'full', hostel: 'full', inventory: 'full', accounts: 'none', payroll: 'none', administration: 'none' }) },
   { key: 'clerk', name: 'Clerk', perms: with_(ALL('standard'), {
-    students: 'full', 'front-office': 'full', finance: 'none', payroll: 'none', hr: 'none', administration: 'none' }) },
+    students: 'full', 'front-office': 'full', finance: 'none', accounts: 'none', payroll: 'none', hr: 'none', administration: 'none' }) },
   { key: 'accountant', name: 'Accountant', perms: with_(ALL('standard'), {
-    finance: 'full', payroll: 'full', inventory: 'full', administration: 'none' }) },
+    finance: 'full', accounts: 'full', payroll: 'full', inventory: 'full', administration: 'none' }) },
   { key: 'teacher', name: 'Teacher', perms: with_(ALL('standard'), {
-    finance: 'none', payroll: 'none', administration: 'none' }) },
+    finance: 'none', accounts: 'none', payroll: 'none', administration: 'none' }) },
   { key: 'staff', name: 'Non-Teaching Staff', perms: with_(ALL('none'), {
     library: 'standard', transport: 'standard', inventory: 'standard', 'front-office': 'standard' }) },
 ];

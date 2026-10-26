@@ -1,6 +1,6 @@
 // Storage for staff roles (see utils/permissions.js for what the levels mean).
 const db = require('../config/db');
-const { DEFAULT_ROLES, normalizePerms } = require('./permissions');
+const { DEFAULT_ROLES, AREA_KEYS, normalizePerms } = require('./permissions');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS staff_roles (
@@ -15,6 +15,15 @@ try { db.exec('ALTER TABLE users ADD COLUMN role_key TEXT'); } catch (e) { if (!
 
 const ins = db.prepare('INSERT OR IGNORE INTO staff_roles (key, name, perms, builtin, sort_order) VALUES (?, ?, ?, 1, ?)');
 DEFAULT_ROLES.forEach((r, i) => ins.run(r.key, r.name, JSON.stringify(r.perms), i));
+// Areas added in later versions: built-in roles take the default level, custom roles start with none.
+for (const r of db.prepare('SELECT key, perms FROM staff_roles').all()) {
+  const perms = JSON.parse(r.perms);
+  const missing = AREA_KEYS.filter(k => !(k in perms));
+  if (!missing.length) continue;
+  const def = DEFAULT_ROLES.find(d => d.key === r.key)?.perms || {};
+  for (const k of missing) perms[k] = def[k] || 'none';
+  db.prepare('UPDATE staff_roles SET perms = ? WHERE key = ?').run(JSON.stringify(perms), r.key);
+}
 // Existing teacher logins become the Teacher role, which matches what teachers could already do.
 db.prepare("UPDATE users SET role_key = 'teacher' WHERE role = 'teacher' AND role_key IS NULL").run();
 
