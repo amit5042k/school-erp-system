@@ -38,8 +38,10 @@ const NAV: NavItem[] = [
     { label: 'Exams',         href: '/exams'     },
     { label: 'Marks Entry',   href: '/marks'     },
     { label: 'Time Table',    href: '/timetable', roles: ALL },
+    { label: 'Online Tests',  href: '/online-tests', roles: ALL },
   ]},
   { label: 'Transport',             href: '/transport',             icon: '🚌' },
+  { label: 'Bus Tracking',          href: '/bus-tracking',          icon: '📍', roles: ALL },
   { label: 'Settings',              href: '/settings',              icon: '⚙', roles: ADMIN },
   { label: 'Human Resource',        icon: '👥', children: [
     { label: 'Teachers',       href: '/teachers' },
@@ -63,6 +65,7 @@ const NAV: NavItem[] = [
   { label: 'School calender',       href: '/calendar',              icon: '📅', roles: ALL },
   { label: 'Student Prospectus',    href: '/prospectus',            icon: '🎓', roles: ADMIN },
   { label: 'Hostel',                href: '/hostel',                icon: '🏨' },
+  { label: 'My Hostel',             href: '/hostel/my',             icon: '🏨', roles: ['student', 'parent'] },
   { label: 'Payroll Management',    href: '/payroll',               icon: '💰', roles: ['admin', 'teacher'] },
   { label: 'Inventory',             href: '/inventory',             icon: '📦', roles: ADMIN },
   { label: 'Item Requests',         href: '/inventory/requests',    icon: '📦', roles: ['teacher'] },

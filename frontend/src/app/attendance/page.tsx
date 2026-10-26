@@ -62,6 +62,7 @@ export default function AttendancePage() {
             { label: 'Biometric Devices', href: '/hr/biometric-devices' },
             { label: 'Live Punches', href: '/hr/biometric-live' },
             { label: 'Map Biometric IDs', href: '/hr/biometric-mapping' },
+            { label: 'Student Biometric Attendance', href: '/hr/biometric-students' },
             { label: 'Staff Leaves Report', href: '/report/staff-leaves' },
           ]},
           { title: 'Transport', actions: [

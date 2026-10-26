@@ -63,6 +63,23 @@ db.exec(`
 `);
 addColumn('teachers', 'biometric_id TEXT');
 addColumn('students', 'biometric_id TEXT');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS bio_student_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled INTEGER NOT NULL DEFAULT 0,
+    present_until TEXT NOT NULL DEFAULT '08:30',
+    ignore_after TEXT NOT NULL DEFAULT '13:00'
+  );
+  INSERT OR IGNORE INTO bio_student_settings (id) VALUES (1);
+  -- What the device last wrote into class attendance; lets us tell our own marks from a teacher's.
+  CREATE TABLE IF NOT EXISTS bio_student_marks (
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    status TEXT NOT NULL,
+    punch_time TEXT NOT NULL,
+    PRIMARY KEY (student_id, date)
+  );
+`);
 
 const ONLINE_MINUTES = 5;
 const nowIso = () => new Date().toISOString();
@@ -98,6 +115,44 @@ function recomputeTouched(touched) {
   return days;
 }
 
+/* ---------- Student class attendance from punches ---------- */
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const studentSettings = () => db.prepare('SELECT * FROM bio_student_settings WHERE id = 1').get();
+
+// First punch before present_until → present; up to ignore_after → late; later punches are ignored.
+// A day a teacher has marked (or changed after the device marked it) is never overwritten.
+function applyStudentDay(studentId, date, cfg = studentSettings()) {
+  if (!cfg?.enabled || date > today()) return null;
+  const first = db.prepare(`SELECT MIN(punch_time) AS t FROM bio_punches WHERE student_id = ? AND punch_date = ? AND substr(punch_time, 1, 5) <= ?`)
+    .get(studentId, date, cfg.ignore_after)?.t;
+  if (!first) return null;
+  const status = first.slice(0, 5) <= cfg.present_until ? 'present' : 'late';
+  const remarks = `Biometric ${first.slice(0, 5)}`;
+  const row = db.prepare('SELECT status, remarks FROM attendance WHERE student_id = ? AND date = ?').get(studentId, date);
+  const mine = db.prepare('SELECT status FROM bio_student_marks WHERE student_id = ? AND date = ?').get(studentId, date);
+  if (row) {
+    const ours = mine && row.status === mine.status && String(row.remarks || '').startsWith('Biometric');
+    if (!ours) return 'kept';
+    db.prepare('UPDATE attendance SET status = ?, remarks = ? WHERE student_id = ? AND date = ?').run(status, remarks, studentId, date);
+  } else {
+    db.prepare('INSERT INTO attendance (student_id, date, status, remarks) VALUES (?, ?, ?, ?)').run(studentId, date, status, remarks);
+  }
+  db.prepare(`INSERT INTO bio_student_marks (student_id, date, status, punch_time) VALUES (?, ?, ?, ?)
+    ON CONFLICT(student_id, date) DO UPDATE SET status = excluded.status, punch_time = excluded.punch_time`).run(studentId, date, status, first);
+  return status;
+}
+function applyStudentDays(keys) {
+  const cfg = studentSettings();
+  const out = { marked: 0, kept: 0 };
+  if (!cfg?.enabled) return out;
+  for (const k of keys) {
+    const [sid, date] = k.split('|');
+    const r = applyStudentDay(Number(sid), date, cfg);
+    if (r === 'kept') out.kept++; else if (r) out.marked++;
+  }
+  return out;
+}
+
 /* ---------- ATTLOG parsing ---------- */
 // "PIN\tYYYY-MM-DD HH:MM:SS\tstatus\tverify\tworkcode\t..." — tolerate spaces, missing fields, CRLF.
 function parseAttlogLine(line) {
@@ -125,6 +180,7 @@ function storeAttlog(device, body) {
   const lines = String(body || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 20000);
   let stored = 0, duplicates = 0, invalid = 0;
   const touched = new Set();
+  const studentDays = new Set();
   const cache = new Map();
   db.transaction(() => {
     for (const line of lines) {
@@ -136,8 +192,10 @@ function storeAttlog(device, body) {
       if (!info.changes) { duplicates++; continue; }
       stored++;
       if (who.teacher_id) feedHr(who.teacher_id, p.date, p.time, device.sn, touched);
+      else if (who.student_id) studentDays.add(`${who.student_id}|${p.date}`);
     }
     recomputeTouched(touched);
+    applyStudentDays(studentDays);
   })();
   return { lines: lines.length, stored, duplicates, invalid };
 }
@@ -399,6 +457,68 @@ const api = {
     })();
     res.json({ ok: true, saved: ids.size, ...result });
   },
+  studentSettings(req, res) {
+    const cfg = studentSettings();
+    res.json({ ...cfg, enabled: !!cfg.enabled, mapped_students: db.prepare("SELECT COUNT(*) AS c FROM students WHERE biometric_id IS NOT NULL AND biometric_id != ''").get().c });
+  },
+  saveStudentSettings(req, res) {
+    const cur = studentSettings();
+    const b = { ...cur, ...req.body };
+    if (!HHMM.test(String(b.present_until)) || !HHMM.test(String(b.ignore_after))) return err400(res, 'Times must be HH:MM (24-hour)');
+    if (b.ignore_after < b.present_until) return err400(res, '"Ignore punches after" must be later than "Present until"');
+    db.prepare('UPDATE bio_student_settings SET enabled = ?, present_until = ?, ignore_after = ? WHERE id = 1')
+      .run(b.enabled ? 1 : 0, b.present_until, b.ignore_after);
+    res.json({ ok: true });
+  },
+  studentMapping(req, res) {
+    const classId = Number(req.query.class_id) || 0;
+    res.json(db.prepare(`SELECT s.id, s.admission_no, s.full_name, s.roll_no, s.biometric_id, c.name || ' ' || c.section AS class
+      FROM students s LEFT JOIN classes c ON c.id = s.class_id
+      WHERE COALESCE(s.status, 'active') = 'active' AND (? = 0 OR s.class_id = ?) ORDER BY c.name, c.section, s.roll_no, s.full_name`).all(classId, classId));
+  },
+  saveStudentMapping(req, res) {
+    const items = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!items.length) return err400(res, 'Nothing to save');
+    const ids = new Map();
+    for (const it of items) {
+      const sid = Number(it.student_id);
+      const bid = it.biometric_id == null ? '' : String(it.biometric_id).trim();
+      if (!sid || !db.prepare('SELECT 1 FROM students WHERE id = ?').get(sid)) return err400(res, `Unknown student id ${it.student_id}`);
+      if (bid && !/^[A-Za-z0-9_-]{1,24}$/.test(bid)) return err400(res, `Biometric ID "${bid}" may only contain letters, numbers, - and _`);
+      ids.set(sid, bid);
+    }
+    // Staff IDs take priority on the device side, so a student may not reuse one.
+    const staffIds = new Set(db.prepare(`SELECT UPPER(TRIM(COALESCE(NULLIF(biometric_id, ''), employee_no))) AS k FROM teachers`).all().map(r => r.k));
+    const all = new Map(db.prepare("SELECT id, biometric_id FROM students WHERE biometric_id IS NOT NULL AND biometric_id != ''").all().map(r => [r.id, r.biometric_id]));
+    for (const [sid, bid] of ids) { if (bid) all.set(sid, bid); else all.delete(sid); }
+    const seen = new Map();
+    for (const [sid, bid] of all) {
+      if (staffIds.has(bid.toUpperCase())) return err400(res, `Biometric ID ${bid} already belongs to a staff member`);
+      if (seen.has(bid)) {
+        const names = db.prepare('SELECT full_name FROM students WHERE id IN (?, ?)').all(sid, seen.get(bid)).map(r => r.full_name).join(' and ');
+        return err400(res, `Biometric ID ${bid} is given to both ${names}`);
+      }
+      seen.set(bid, sid);
+    }
+    const upd = db.prepare('UPDATE students SET biometric_id = ? WHERE id = ?');
+    let result;
+    db.transaction(() => {
+      for (const [sid, bid] of ids) upd.run(bid || null, sid);
+      result = relink();
+    })();
+    res.json({ ok: true, saved: ids.size, ...result });
+  },
+  applyStudents(req, res) {
+    const { from, to } = req.body || {};
+    if (!isDate(from) || !isDate(to)) return err400(res, 'Choose From and To dates');
+    if (from > to) return err400(res, 'From date must not be after To date');
+    if (!studentSettings().enabled) return err400(res, 'Turn on student attendance from punches first');
+    const keys = db.prepare('SELECT DISTINCT student_id, punch_date FROM bio_punches WHERE student_id IS NOT NULL AND punch_date BETWEEN ? AND ?')
+      .all(from, to).map(r => `${r.student_id}|${r.punch_date}`);
+    let out;
+    db.transaction(() => { out = applyStudentDays(keys); })();
+    res.json({ ok: true, days: keys.length, ...out });
+  },
   relinkNow(req, res) {
     let result;
     db.transaction(() => { result = relink(); })();
@@ -410,6 +530,7 @@ const api = {
 function relink() {
   const pins = db.prepare('SELECT DISTINCT pin FROM bio_punches WHERE teacher_id IS NULL AND student_id IS NULL').all().map(r => r.pin);
   const touched = new Set();
+  const studentDays = new Set();
   let linked = 0;
   const setWho = db.prepare('UPDATE bio_punches SET teacher_id = ?, student_id = ? WHERE pin = ? AND teacher_id IS NULL AND student_id IS NULL');
   for (const pin of pins) {
@@ -419,8 +540,10 @@ function relink() {
       WHERE p.pin = ? AND p.teacher_id IS NULL AND p.student_id IS NULL`).all(pin);
     linked += setWho.run(who.teacher_id, who.student_id, pin).changes;
     if (who.teacher_id) for (const r of rows) feedHr(who.teacher_id, r.punch_date, r.punch_time, r.sn, touched);
+    if (who.student_id) for (const r of rows) studentDays.add(`${who.student_id}|${r.punch_date}`);
   }
-  return { punches_linked: linked, days_updated: recomputeTouched(touched) };
+  const students = applyStudentDays(studentDays);
+  return { punches_linked: linked, days_updated: recomputeTouched(touched), student_days_marked: students.marked };
 }
 
 /* ---------- Reports ---------- */
@@ -487,6 +610,11 @@ function register(router) {
   router.get('/biometric/mapping', ...A, api.mapping);
   router.put('/biometric/mapping', ...A, safe(api.saveMapping));
   router.post('/biometric/relink', ...A, safe(api.relinkNow));
+  router.get('/biometric/students/settings', ...A, api.studentSettings);
+  router.put('/biometric/students/settings', ...A, safe(api.saveStudentSettings));
+  router.get('/biometric/students/mapping', ...A, api.studentMapping);
+  router.put('/biometric/students/mapping', ...A, safe(api.saveStudentMapping));
+  router.post('/biometric/students/apply', ...A, safe(api.applyStudents));
 }
 
-module.exports = { register, registerRoot, parseAttlogLine };
+module.exports = { register, registerRoot, parseAttlogLine, applyStudentDay };

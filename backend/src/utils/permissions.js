@@ -44,6 +44,7 @@ const API_AREAS = [
   ['/comm', 'academic-comm'],
   ['/students', 'students'], ['/stu', 'students'], ['/enquiries', 'students'], ['/prospectus', 'students'],
   ['/attendance', 'attendance'],
+  ['/online-tests', 'academics'], ['/hostel-ops', 'hostel'], ['/bus-tracking', 'transport'],
   ['/exam-schedule', 'academics'], ['/exams', 'academics'], ['/exam', 'academics'], ['/marks', 'academics'],
   ['/timetable', 'academics'], ['/academic', 'academics'], ['/classes', 'academics'],
   ['/homework', 'academic-comm'], ['/activities', 'academic-comm'], ['/events', 'academic-comm'],

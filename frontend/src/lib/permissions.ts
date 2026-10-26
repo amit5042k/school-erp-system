@@ -7,7 +7,7 @@ export type Perms = Record<string, Level>;
 const PAGE_AREAS: [string, string][] = [
   ['/students', 'students'], ['/prospectus', 'students'], ['/enquiries', 'students'],
   ['/attendance', 'attendance'],
-  ['/exams', 'academics'], ['/marks', 'academics'], ['/timetable', 'academics'], ['/academic', 'academics'],
+  ['/exams', 'academics'], ['/online-tests', 'academics'], ['/marks', 'academics'], ['/timetable', 'academics'], ['/academic', 'academics'],
   ['/homework', 'academic-comm'], ['/academic-comm', 'academic-comm'], ['/activities', 'academic-comm'],
   ['/calendar', 'academic-comm'], ['/surveys', 'academic-comm'], ['/documents', 'academic-comm'],
   ['/communications', 'communication'], ['/comms', 'communication'], ['/announcements', 'communication'],
@@ -15,7 +15,7 @@ const PAGE_AREAS: [string, string][] = [
   ['/student-leave', 'attendance'], ['/absent-alerts', 'communication'],
   ['/payroll', 'payroll'],
   ['/teachers', 'hr'], ['/hr', 'hr'], ['/leaves', 'hr'], ['/awards', 'hr'],
-  ['/library', 'library'], ['/transport', 'transport'], ['/hostel', 'hostel'], ['/inventory', 'inventory'],
+  ['/library', 'library'], ['/transport', 'transport'], ['/bus-tracking', 'transport'], ['/hostel', 'hostel'], ['/inventory', 'inventory'],
   ['/visitors', 'front-office'], ['/complaints', 'front-office'], ['/postal', 'front-office'], ['/calls', 'front-office'],
   ['/incidents', 'front-office'], ['/suggestions', 'front-office'],
   ['/users', 'administration'], ['/settings', 'administration'], ['/backups', 'administration'],

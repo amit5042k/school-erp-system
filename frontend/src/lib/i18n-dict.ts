@@ -54,6 +54,9 @@ export const DICT: Record<string, Entry> = {
   'Bulk Import': { hi: 'थोक आयात', pa: 'ਥੋਕ ਆਯਾਤ' },
   'Backups': { hi: 'बैकअप', pa: 'ਬੈਕਅੱਪ' },
   'Accounts': { hi: 'लेखा', pa: 'ਲੇਖਾ' },
+  'Online Tests': { hi: 'ऑनलाइन परीक्षाएँ', pa: 'ਔਨਲਾਈਨ ਟੈਸਟ' },
+  'Bus Tracking': { hi: 'बस ट्रैकिंग', pa: 'ਬੱਸ ਟਰੈਕਿੰਗ' },
+  'My Hostel': { hi: 'मेरा छात्रावास', pa: 'ਮੇਰਾ ਹੋਸਟਲ' },
   'Reports': { hi: 'रिपोर्ट', pa: 'ਰਿਪੋਰਟਾਂ' },
 
   // Header and account

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, fmtDate } from '@/lib/api';
@@ -67,6 +68,14 @@ export default function HostelPage() {
             <button key={t} className={`btn text-sm ${tab === t ? 'btn-primary' : 'bg-gray-200'}`} onClick={() => setTab(t)}>{t[0].toUpperCase()+t.slice(1)}</button>
           ))}
         </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {[['/hostel/roll-call', 'Roll Call', 'Daily present / absent / leave'], ['/hostel/mess', 'Mess', 'Menu, meal counts, mess fee'],
+          ['/hostel/visitors', 'Visitors', 'Visitor in / out log'], ['/hostel/out-pass', 'Out-passes', 'Requests, approvals, overdue']].map(([href, t, d]) => (
+          <Link key={href} href={href} className="card p-3 hover:shadow-md transition">
+            <div className="font-semibold text-brand-700">{t}</div><div className="text-xs text-gray-500">{d}</div>
+          </Link>
+        ))}
       </div>
       {err && <div className="text-red-700 text-sm mb-2">{err}</div>}
 
