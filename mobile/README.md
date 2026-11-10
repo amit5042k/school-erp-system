@@ -88,6 +88,6 @@ keytool -genkeypair -v -keystore release.jks -alias schoolerp -keyalg RSA -keysi
 ## Notes and limits
 
 - The app shows the live website, so it needs internet. Without a connection it shows the offline screen.
-- **Excel downloads and Print** buttons don't work inside the Android web view. Use the website on a computer for those, or open the file links (they open in the phone's browser).
+- **Print** opens Android's print dialog (print or save as PDF) and **Excel downloads** are saved to the phone's Downloads folder with a share option, through the app's built-in bridge.
 - There's no iPhone build yet. iPhone users can use the website, or add it to their home screen from Safari.
 - The app targets Android 16 (API 36) and runs on Android 7.0 and newer.

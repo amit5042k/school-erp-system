@@ -46,10 +46,9 @@ sudo mkdir -p /var/erp/schools && sudo chown -R erp:erp /var/erp /opt/school-erp
 # The code, built once
 sudo -u erp git clone https://github.com/amit5042k/school-erp-system.git /opt/school-erp
 cd /opt/school-erp
-sudo -u erp npm --prefix backend ci --omit=dev
+sudo -u erp npm install                     # backend + frontend (npm workspaces; there is no committed lock file)
 sudo -u erp npm --prefix platform install --omit=dev
 echo 'NEXT_PUBLIC_API_BASE=/api' | sudo -u erp tee frontend/.env.production
-sudo -u erp npm --prefix frontend ci
 sudo -u erp npm --prefix frontend run build
 ```
 
@@ -184,9 +183,9 @@ All schools run the same code, so one upgrade covers them all:
 ```bash
 cd /opt/school-erp
 sudo -u erp git pull
-sudo -u erp npm --prefix backend ci --omit=dev
+sudo -u erp npm install
 sudo -u erp npm --prefix platform install --omit=dev
-sudo -u erp npm --prefix frontend ci && sudo -u erp npm --prefix frontend run build
+sudo -u erp npm --prefix frontend run build
 sudo -u erp pm2 reload all
 ```
 

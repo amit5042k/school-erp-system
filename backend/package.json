@@ -7,6 +7,7 @@
     "start": "node src/server.js",
     "seed": "node src/utils/seed.js",
     "seed:dev": "node src/utils/seed.js --force --dev",
+    "init": "node src/utils/init.js",
     "backup": "node -e \"require('./src/utils/backup').backupNow().then(f => console.log('Backup written to', f))\"",
     "test": "bash test/run.sh"
   },

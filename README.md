@@ -83,6 +83,12 @@ Edit `backend/.env` and change `JWT_SECRET` for anything other than local dev.
 cd backend && npm run seed:dev   # local development: wipes and reloads demo data
 ```
 
+For a real school, start empty instead (no demo data) and create the first Super Admin:
+
+```bash
+cd backend && npm run init -- --school "Your School Name" --password 'a-temporary-password'
+```
+
 `npm run seed` (without `:dev`) refuses to run on a database that already has users, because seeding
 erases all data. On a fresh database it loads the demo data and makes every account choose a new
 password at first sign-in. Never seed a live school's database.
