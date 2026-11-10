@@ -33,7 +33,10 @@ export default function VoucherView({ params }: { params: { id: string } }) {
 
   async function cancel() {
     if (!reason.trim()) return flash('Give a reason for cancelling.', false);
-    try { await api(`/accounts/vouchers/${params.id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }); setShowCancel(false); flash('Voucher cancelled.'); load(); }
+    try {
+      const r = await api(`/accounts/vouchers/${params.id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
+      setShowCancel(false); flash(r?.also_cancelled ? `Voucher cancelled, with its reversal ${r.also_cancelled}.` : 'Voucher cancelled.'); load();
+    }
     catch (e: any) { flash(e.message, false); }
   }
 

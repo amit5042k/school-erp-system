@@ -16,7 +16,7 @@ export default function AccountsSettings() {
   const { ledgers } = useLedgers();
   const fyStart = (() => { const t = localDate(); const y = Number(t.slice(0, 4)), m = Number(t.slice(5, 7)); return `${m >= 4 ? y : y - 1}-04-01`; })();
   const [range, setRange] = useState({ from: fyStart, to: localDate() });
-  const [result, setResult] = useState<{ receipts: number; reversals: number; salaries: number } | null>(null);
+  const [result, setResult] = useState<{ receipts: number; reversals: number; salaries: number; failed?: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const { msg, flash } = useFlash();
 
@@ -62,7 +62,7 @@ export default function AccountsSettings() {
 
           <div className="md:col-span-2 font-semibold text-brand-700 border-t pt-3">Automatic posting</div>
           <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={!!s.auto_post_fees} onChange={e => setS({ ...s, auto_post_fees: e.target.checked ? 1 : 0 })} />
-            <span>Post fee receipts as Receipt vouchers<span className="block text-xs text-gray-500">Cash → Cash ledger, other modes (cheque, UPI, online) → Bank ledger, credited to the fee income ledger of each head. Cancelled or bounced receipts get a reversing Journal.</span></span></label>
+            <span>Post fee receipts as Receipt vouchers<span className="block text-xs text-gray-500">Cash → Cash ledger, other modes (cheque, UPI, online) → Bank ledger, credited to the fee income ledger of each head. Cancelled or bounced receipts are reversed by a Payment voucher.</span></span></label>
           <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={!!s.auto_post_payroll} onChange={e => setS({ ...s, auto_post_payroll: e.target.checked ? 1 : 0 })} />
             <span>Post salaries marked paid as Payment vouchers<span className="block text-xs text-gray-500">Salaries &amp; Wages Dr, Bank Cr for the net pay; deductions go to Salary Deductions Payable.</span></span></label>
           <div><label className="label">Post automatically from</label>
@@ -85,6 +85,7 @@ export default function AccountsSettings() {
           <button className="btn btn-accent" disabled={busy}>{busy ? 'Posting…' : 'Post Missing Entries'}</button>
         </div>
         {result && <div className="mt-3 text-green-700">Posted {result.receipts} fee receipt(s), {result.reversals} reversal(s) and {result.salaries} salary payment(s).</div>}
+        {result?.failed?.length ? <div className="mt-2 text-red-700">Could not post {result.failed.length} item(s):<ul className="list-disc ml-5">{result.failed.map(f => <li key={f}>{f}</li>)}</ul></div> : null}
       </form>
     </Shell>
   );

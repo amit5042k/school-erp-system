@@ -56,7 +56,7 @@ db.exec(`
     updated_at TEXT,
     UNIQUE (vtype, fy, number)
   );
-  CREATE UNIQUE INDEX IF NOT EXISTS ux_acc_voucher_source ON acc_vouchers(source_type, source_ref) WHERE source_type IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS ix_acc_voucher_source ON acc_vouchers(source_type, source_ref);
   CREATE INDEX IF NOT EXISTS ix_acc_voucher_date ON acc_vouchers(date);
   CREATE TABLE IF NOT EXISTS acc_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,6 +83,12 @@ db.exec(`
 // Automatic posting only picks up receipts/salaries from this date; older ones are posted with a manual backfill.
 try { db.exec('ALTER TABLE acc_settings ADD COLUMN auto_post_since TEXT'); } catch (e) { if (!/duplicate column/i.test(e.message)) throw e; }
 db.prepare('UPDATE acc_settings SET auto_post_since = COALESCE(auto_post_since, ?) WHERE id = 1').run(today());
+// Built-in groups are found by a stable key, so renaming them can't break automatic posting.
+try { db.exec('ALTER TABLE acc_groups ADD COLUMN system_key TEXT'); } catch (e) { if (!/duplicate column/i.test(e.message)) throw e; }
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS ux_acc_group_key ON acc_groups(system_key)');
+// Only one active voucher per source: a salary voucher is cancelled and posted afresh when its slip changes.
+db.exec(`DROP INDEX IF EXISTS ux_acc_voucher_source;
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_acc_voucher_source_active ON acc_vouchers(source_type, source_ref) WHERE source_type IS NOT NULL AND status = 'active'`);
 
 /* ---------- Seed chart of accounts ---------- */
 const TALLY_PARENTS = {
@@ -123,9 +129,18 @@ const SEED_LEDGERS = [
   ['Laboratory Expenses', 'Academic Expenses', null], ['Sports & Activities', 'Academic Expenses', null],
   ['Examination Expenses', 'Academic Expenses', null], ['Bank Charges', 'Bank & Finance Charges', null],
 ];
+const groupKey = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 (function seed() {
-  const g = db.prepare('INSERT OR IGNORE INTO acc_groups (name, nature, tally_parent, builtin, sort_order) VALUES (?, ?, ?, 1, ?)');
-  SEED_GROUPS.forEach(([name, nature, parent], i) => g.run(name, nature, parent, i));
+  // Key existing built-in groups (sort_order is the seed position and never changes, so renamed ones are found too).
+  const key = db.prepare(`UPDATE acc_groups SET system_key = ? WHERE id = (SELECT id FROM acc_groups WHERE builtin = 1 AND system_key IS NULL
+    AND (name = ? OR sort_order = ?) ORDER BY name = ? DESC, id LIMIT 1) AND NOT EXISTS (SELECT 1 FROM acc_groups WHERE system_key = ?)`);
+  const g = db.prepare(`INSERT OR IGNORE INTO acc_groups (name, nature, tally_parent, builtin, sort_order, system_key) SELECT ?, ?, ?, 1, ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM acc_groups WHERE system_key = ?)`);
+  SEED_GROUPS.forEach(([name, nature, parent], i) => {
+    const k = groupKey(name);
+    key.run(k, name, i, name, k);
+    g.run(name, nature, parent, i, k, k);
+  });
   const { c } = db.prepare('SELECT COUNT(*) AS c FROM acc_ledgers').get();
   if (!c) {
     const l = db.prepare('INSERT OR IGNORE INTO acc_ledgers (name, group_id, system_key) VALUES (?, (SELECT id FROM acc_groups WHERE name = ?), ?)');
@@ -165,7 +180,8 @@ function ledgerByName(name, groupName) {
   if (db.prepare('SELECT 1 FROM acc_groups WHERE name = ?').get(name)) name = `${name} (Fee)`;
   const found = db.prepare('SELECT id FROM acc_ledgers WHERE name = ?').get(name);
   if (found) return found.id;
-  const g = db.prepare('SELECT id FROM acc_groups WHERE name = ?').get(groupName);
+  const g = db.prepare('SELECT id FROM acc_groups WHERE system_key = ?').get(groupKey(groupName));
+  if (!g) throw new Error(`Built-in group "${groupName}" is missing`);
   return db.prepare('INSERT INTO acc_ledgers (name, group_id) VALUES (?, ?)').run(name, g.id).lastInsertRowid;
 }
 const systemLedger = (key) => db.prepare('SELECT id FROM acc_ledgers WHERE system_key = ?').get(key)?.id;
@@ -246,6 +262,12 @@ function feeLines(rows) {
   return { income, total };
 }
 
+// A Cash/Bank ledger chosen in Settings, checked so a missing one is reported by name instead of failing on the insert.
+function settingsLedger(id, what) {
+  if (!id || !ledgerById(id)) throw new Error(`the ${what} ledger chosen in Accounts Settings no longer exists`);
+  return id;
+}
+
 // Posts a fee receipt as a Receipt voucher (once). Returns true when a voucher was created.
 function postReceipt(receiptNo) {
   if (db.prepare("SELECT 1 FROM acc_vouchers WHERE source_type = 'fee_receipt' AND source_ref = ?").get(receiptNo)) return false;
@@ -257,11 +279,13 @@ function postReceipt(receiptNo) {
   const { income, total } = feeLines(rows);
   if (!(total > 0)) return false;
   const first = rows[0];
-  const cashBank = first.mode === 'cash' ? s.fee_cash_ledger_id : s.fee_bank_ledger_id;
+  const day = localDay(first.paid_on);
+  if (!isDate(day)) throw new Error(`receipt ${receiptNo} has an invalid date "${first.paid_on}"`);
+  const cashBank = first.mode === 'cash' ? settingsLedger(s.fee_cash_ledger_id, 'fee cash') : settingsLedger(s.fee_bank_ledger_id, 'fee bank');
   const lines = [{ ledger_id: cashBank, dr: total, cr: 0 }, ...income.map(x => ({ ledger_id: x.ledger_id, dr: 0, cr: x.amount }))];
   const ref = first.mode === 'cheque' ? [first.cheque_no, first.cheque_bank].filter(Boolean).join(' / ') : (first.remarks || null);
   insertVoucher({
-    vtype: 'receipt', date: localDay(first.paid_on), lines, userId: first.received_by,
+    vtype: 'receipt', date: day, lines, userId: first.received_by,
     narration: `Fee receipt ${receiptNo} — ${first.student_name || 'Student'} (${first.admission_no || '—'}), ${first.mode}`,
     reference: ref, source_type: 'fee_receipt', source_ref: receiptNo,
   });
@@ -289,43 +313,96 @@ function postReversal(receiptNo) {
 }
 
 // Salary paid → Payment voucher: Dr Salaries (gross), Cr Bank (net), Cr Deductions Payable.
-function postSalary(payrollId) {
-  if (db.prepare("SELECT 1 FROM acc_vouchers WHERE source_type = 'salary' AND source_ref = ?").get(String(payrollId))) return false;
-  const p = db.prepare(`SELECT p.*, t.full_name, t.employee_no FROM payroll p JOIN teachers t ON t.id = p.teacher_id WHERE p.id = ?`).get(payrollId);
-  if (!p || p.status !== 'paid' || !(p.net_pay > 0)) return false;
+// Returns what the slip's voucher should be, or null when the slip should have none.
+function salaryPlan(p) {
+  if (!p || p.status !== 'paid' || !(p.net_pay > 0)) return null;
   const deductions = round2(p.deductions || 0);
   const gross = round2(p.net_pay + deductions);
-  const lines = [{ ledger_id: systemLedger('salaries'), dr: gross, cr: 0 }, { ledger_id: settings().salary_bank_ledger_id, dr: 0, cr: round2(p.net_pay) }];
+  const lines = [{ ledger_id: systemLedger('salaries'), dr: gross, cr: 0 },
+    { ledger_id: settingsLedger(settings().salary_bank_ledger_id, 'salary bank'), dr: 0, cr: round2(p.net_pay) }];
   if (deductions > 0) lines.push({ ledger_id: systemLedger('salary_deductions'), dr: 0, cr: deductions });
   // Slips marked paid without a date are dated the last day of their salary month.
   const monthEnd = /^\d{4}-\d{2}$/.test(p.month || '') ? db.prepare("SELECT date(? || '-01', '+1 month', '-1 day') AS d").get(p.month).d : today();
   const day = isDate(p.paid_on) ? p.paid_on : (p.paid_on ? localDay(p.paid_on) : monthEnd);
+  if (!isDate(day)) throw new Error(`salary slip ${p.id} has an invalid paid date "${p.paid_on}"`);
+  return { date: day > today() ? today() : day, capped: day > today(), lines, gross, deductions };
+}
+// Whether a posted salary voucher still matches the slip (a future paid date is posted as today, so any date up to it matches).
+function salaryMatches(v, plan) {
+  const lines = db.prepare('SELECT ledger_id, dr, cr FROM acc_lines WHERE voucher_id = ?').all(v.id);
+  const ded = systemLedger('salary_deductions');
+  const gross = round2(lines.reduce((a, l) => a + l.dr, 0));
+  const deductions = round2(lines.filter(l => l.ledger_id === ded).reduce((a, l) => a + l.cr, 0));
+  return gross === plan.gross && deductions === plan.deductions && (v.date === plan.date || (plan.capped && v.date <= plan.date));
+}
+// Keeps a slip's salary voucher in step with Payroll: posts it when paid; cancels it (and posts afresh if still paid) when
+// the slip goes back to pending, is deleted, or its amounts or date change. A voucher cancelled by hand in Accounts is
+// not posted again until the slip itself changes. Returns true when a voucher was created.
+function postSalary(payrollId, userId = null) {
+  const ref = String(payrollId);
+  const p = db.prepare(`SELECT p.*, t.full_name, t.employee_no FROM payroll p JOIN teachers t ON t.id = p.teacher_id WHERE p.id = ?`).get(payrollId);
+  const plan = salaryPlan(p);
+  const active = db.prepare("SELECT * FROM acc_vouchers WHERE source_type = 'salary' AND source_ref = ? AND status = 'active'").get(ref);
+  if (active) {
+    if (plan && salaryMatches(active, plan)) return false;
+    const reason = !p ? 'salary slip deleted in Payroll' : !plan ? 'salary slip no longer paid in Payroll' : 'salary slip changed in Payroll';
+    const before = JSON.stringify(voucherFull(active.id));
+    db.prepare("UPDATE acc_vouchers SET status = 'cancelled', cancel_reason = ?, cancelled_at = CURRENT_TIMESTAMP, cancelled_by = NULL WHERE id = ?").run(reason, active.id);
+    db.prepare('INSERT INTO acc_audit (voucher_id, action, user_id, before_json) VALUES (?, ?, ?, ?)').run(active.id, `cancelled: ${reason}`, userId, before);
+  }
+  if (!plan) return false;
+  const last = db.prepare("SELECT * FROM acc_vouchers WHERE source_type = 'salary' AND source_ref = ? ORDER BY id DESC LIMIT 1").get(ref);
+  if (!active && last?.cancelled_by && salaryMatches(last, plan)) return false;
   insertVoucher({
-    vtype: 'payment', date: day > today() ? today() : day, lines, userId: null,
-    narration: `Salary ${p.month} — ${p.full_name} (${p.employee_no})`, source_type: 'salary', source_ref: String(p.id),
+    vtype: 'payment', date: plan.date, lines: plan.lines, userId: null,
+    narration: `Salary ${p.month} — ${p.full_name} (${p.employee_no})`, source_type: 'salary', source_ref: ref,
   });
   return true;
 }
+// Paid slips with no salary voucher in the books (one cancelled by hand in Accounts counts as dealt with).
+const UNPOSTED_SALARY = `p.status = 'paid' AND NOT EXISTS (SELECT 1 FROM acc_vouchers v WHERE v.source_type = 'salary' AND v.source_ref = CAST(p.id AS TEXT)
+  AND (v.status = 'active' OR v.cancelled_by IS NOT NULL))`;
 
 const tx = (fn) => db.transaction(fn);
+// Posts one item in its own savepoint, so one bad receipt or slip is skipped and logged (once per error) instead of
+// rolling back everything else in the sweep.
+const failures = new Map();
+function attempt(what, fn) {
+  try {
+    const r = tx(fn)();
+    failures.delete(what);
+    return r;
+  } catch (e) {
+    if (failures.get(what) !== e.message) console.error(`accounts: could not post ${what}: ${e.message}`);
+    failures.set(what, e.message);
+    return null;
+  }
+}
+
 function syncRange(from, to) {
-  const out = { receipts: 0, reversals: 0, salaries: 0 };
+  const out = { receipts: 0, reversals: 0, salaries: 0, failed: [] };
+  const run = (what, fn) => {
+    const r = attempt(what, fn);
+    if (r === null) out.failed.push(`${what}: ${failures.get(what)}`);
+    return r;
+  };
   tx(() => {
     const receipts = db.prepare(`SELECT receipt_no, MIN(paid_on) AS paid_on, MIN(reversed) AS all_reversed FROM fee_payments
       GROUP BY receipt_no HAVING date(MIN(paid_on), 'localtime') BETWEEN ? AND ? ORDER BY MIN(paid_on), MIN(id)`).all(from, to);
     for (const r of receipts) {
-      if (postReceipt(r.receipt_no)) out.receipts++;
-      if (r.all_reversed && postReversal(r.receipt_no)) out.reversals++;
+      if (run(`receipt ${r.receipt_no}`, () => postReceipt(r.receipt_no))) out.receipts++;
+      if (r.all_reversed && run(`reversal of ${r.receipt_no}`, () => postReversal(r.receipt_no))) out.reversals++;
     }
     const pays = db.prepare(`SELECT id FROM payroll WHERE status = 'paid'
       AND COALESCE(substr(paid_on, 1, 10), date(month || '-01', '+1 month', '-1 day')) BETWEEN ? AND ? ORDER BY paid_on, id`).all(from, to);
-    for (const p of pays) if (postSalary(p.id)) out.salaries++;
+    for (const p of pays) if (run(`salary slip ${p.id}`, () => postSalary(p.id))) out.salaries++;
   })();
   return out;
 }
 
 // Posts anything since auto_post_since that isn't in the books yet. Covers receipts created without a signed-in
-// request (e.g. the online payment webhook) and anything a targeted hook missed.
+// request (e.g. the online payment webhook) and anything a targeted hook missed, and cancels salary vouchers whose
+// slip was deleted (e.g. with its teacher), set back to pending or re-priced.
 function catchUp() {
   const s = settings();
   if (!s.auto_post_fees && !s.auto_post_payroll) return;
@@ -335,33 +412,39 @@ function catchUp() {
       const rows = db.prepare(`SELECT receipt_no, MIN(reversed) AS all_reversed FROM fee_payments
         WHERE date(paid_on, 'localtime') >= ? GROUP BY receipt_no`).all(since);
       for (const r of rows) {
-        postReceipt(r.receipt_no);
-        if (r.all_reversed) postReversal(r.receipt_no);
+        attempt(`receipt ${r.receipt_no}`, () => postReceipt(r.receipt_no));
+        if (r.all_reversed) attempt(`reversal of ${r.receipt_no}`, () => postReversal(r.receipt_no));
       }
     }
     if (s.auto_post_payroll) {
-      for (const p of db.prepare(`SELECT p.id FROM payroll p WHERE p.status = 'paid'
-        AND COALESCE(substr(p.paid_on, 1, 10), date(p.month || '-01', '+1 month', '-1 day')) >= ?
-        AND NOT EXISTS (SELECT 1 FROM acc_vouchers v WHERE v.source_type = 'salary' AND v.source_ref = CAST(p.id AS TEXT))`).all(since)) postSalary(p.id);
+      const stale = db.prepare(`SELECT v.source_ref AS id FROM acc_vouchers v LEFT JOIN payroll p ON CAST(p.id AS TEXT) = v.source_ref
+        WHERE v.source_type = 'salary' AND v.status = 'active' AND (p.id IS NULL OR p.status <> 'paid'
+          OR ROUND(p.net_pay + COALESCE(p.deductions, 0), 2) <> (SELECT ROUND(SUM(dr), 2) FROM acc_lines WHERE voucher_id = v.id))`).all();
+      const unposted = db.prepare(`SELECT p.id FROM payroll p WHERE ${UNPOSTED_SALARY}
+        AND COALESCE(substr(p.paid_on, 1, 10), date(p.month || '-01', '+1 month', '-1 day')) >= ?`).all(since);
+      for (const p of [...stale, ...unposted]) attempt(`salary slip ${p.id}`, () => postSalary(Number(p.id)));
     }
   })();
 }
 setInterval(() => { try { catchUp(); } catch (e) { console.error('accounts catch-up failed:', e.message); } }, 60 * 1000).unref();
 
-events.on('api:change', ({ method, path, body, result }) => {
+events.on('api:change', ({ method, path, body, user, result }) => {
   try {
     const s = settings();
     if (s.auto_post_fees) {
-      if (method === 'POST' && path === '/api/finance/collect' && result?.receipt_no) tx(() => postReceipt(result.receipt_no))();
+      if (method === 'POST' && path === '/api/finance/collect' && result?.receipt_no) attempt(`receipt ${result.receipt_no}`, () => postReceipt(result.receipt_no));
       const pay = path.match(/^\/api\/fees\/\d+\/pay$/);
-      if (method === 'POST' && pay && result?.receipt) tx(() => postReceipt(result.receipt))();
+      if (method === 'POST' && pay && result?.receipt) attempt(`receipt ${result.receipt}`, () => postReceipt(result.receipt));
       const rev = path.match(/^\/api\/finance\/(?:receipt|cheques)\/([^/]+)\/(?:cancel|bounce)$/);
-      if (method === 'POST' && rev) tx(() => postReversal(decodeURIComponent(rev[1])))();
+      if (method === 'POST' && rev) { const no = decodeURIComponent(rev[1]); attempt(`reversal of ${no}`, () => postReversal(no)); }
     }
     if (s.auto_post_payroll) {
-      if (method === 'POST' && path === '/api/pay/mark-paid' && Array.isArray(body?.ids)) tx(() => body.ids.forEach(id => postSalary(Number(id))))();
+      if (method === 'POST' && path === '/api/pay/mark-paid' && Array.isArray(body?.ids)) {
+        for (const id of body.ids) attempt(`salary slip ${id}`, () => postSalary(Number(id), user?.id));
+      }
+      // Any edit or delete of a slip: status, amounts or paid date may have changed.
       const pr = path.match(/^\/api\/payroll\/(\d+)$/);
-      if (method === 'PUT' && pr && body?.status === 'paid') tx(() => postSalary(Number(pr[1])))();
+      if ((method === 'PUT' || method === 'DELETE') && pr) attempt(`salary slip ${pr[1]}`, () => postSalary(Number(pr[1]), user?.id));
     }
     // Online payments (verify / reconcile) and anything else money-related: sweep for unposted entries.
     if (/^\/api\/(payments|finance|fees|pay|payroll)(\/|$)/.test(path)) catchUp();
@@ -445,8 +528,7 @@ const h = {
     const unposted = {
       receipts: db.prepare(`SELECT COUNT(DISTINCT receipt_no) AS c FROM fee_payments p WHERE p.reversed = 0
         AND NOT EXISTS (SELECT 1 FROM acc_vouchers v WHERE v.source_type = 'fee_receipt' AND v.source_ref = p.receipt_no)`).get().c,
-      salaries: db.prepare(`SELECT COUNT(*) AS c FROM payroll p WHERE p.status = 'paid'
-        AND NOT EXISTS (SELECT 1 FROM acc_vouchers v WHERE v.source_type = 'salary' AND v.source_ref = CAST(p.id AS TEXT))`).get().c,
+      salaries: db.prepare(`SELECT COUNT(*) AS c FROM payroll p WHERE ${UNPOSTED_SALARY}`).get().c,
     };
     res.json({
       fy: fyOf(t),
@@ -556,6 +638,8 @@ const h = {
     const l = db.prepare('SELECT * FROM acc_ledgers WHERE id = ?').get(req.params.id);
     if (!l) throw httpError(404, 'Ledger not found');
     if (l.system_key) throw httpError(400, 'This ledger is used for automatic posting and cannot be deleted');
+    const s = settings();
+    if ([s.fee_cash_ledger_id, s.fee_bank_ledger_id, s.salary_bank_ledger_id].includes(l.id)) throw httpError(400, 'This ledger is chosen in Accounts Settings for automatic posting; choose another ledger there first');
     if (db.prepare('SELECT 1 FROM acc_lines WHERE ledger_id = ?').get(l.id)) throw httpError(409, 'This ledger has vouchers; deactivate it instead');
     db.prepare('DELETE FROM acc_ledgers WHERE id = ?').run(l.id);
     res.json({ ok: true });
@@ -595,7 +679,8 @@ const h = {
     const lines = checkVoucher(b.vtype, b.date, b.lines);
     if (b.attachment_url && !/^(https?:\/\/|\/api\/files\/)/i.test(b.attachment_url)) throw httpError(400, 'Attachment must be an uploaded file or a web link');
     const id = tx(() => {
-      const vid = insertVoucher({ ...b, lines, userId: req.user.id });
+      // Only these fields: source_type/source_ref are reserved for automatic posting.
+      const vid = insertVoucher({ vtype: b.vtype, date: b.date, narration: b.narration, reference: b.reference, attachment_url: b.attachment_url, lines, userId: req.user.id });
       db.prepare('INSERT INTO acc_audit (voucher_id, action, user_id, after_json) VALUES (?, ?, ?, ?)').run(vid, 'created', req.user.id, JSON.stringify(voucherFull(vid)));
       return vid;
     })();
@@ -630,11 +715,22 @@ const h = {
     if (cur.status !== 'active') throw httpError(400, 'Voucher is already cancelled');
     const reason = String(req.body?.reason || '').trim();
     if (!reason) throw httpError(400, 'A reason is required to cancel a voucher');
+    const linked = (type) => db.prepare("SELECT id, voucher_no FROM acc_vouchers WHERE source_type = ? AND source_ref = ? AND status = 'active'").get(type, cur.source_ref);
+    // A fee receipt and its reversal cancel each other out: cancelling the receipt cancels its reversal too, and the
+    // reversal can't be cancelled alone (that would book income for a receipt cancelled in Fees).
+    const reversal = cur.source_type === 'fee_receipt' ? linked('fee_reversal') : null;
+    if (cur.source_type === 'fee_reversal' && linked('fee_receipt')) {
+      throw httpError(400, `This reverses a receipt cancelled in Fees; cancel the original receipt voucher ${linked('fee_receipt').voucher_no} instead (its reversal is cancelled with it)`);
+    }
+    const cancel = (v, why) => {
+      db.prepare("UPDATE acc_vouchers SET status = 'cancelled', cancel_reason = ?, cancelled_at = CURRENT_TIMESTAMP, cancelled_by = ? WHERE id = ?").run(why, req.user.id, v.id);
+      db.prepare('INSERT INTO acc_audit (voucher_id, action, user_id, before_json) VALUES (?, ?, ?, ?)').run(v.id, `cancelled: ${why}`, req.user.id, JSON.stringify(v));
+    };
     tx(() => {
-      db.prepare("UPDATE acc_vouchers SET status = 'cancelled', cancel_reason = ?, cancelled_at = CURRENT_TIMESTAMP, cancelled_by = ? WHERE id = ?").run(reason, req.user.id, cur.id);
-      db.prepare('INSERT INTO acc_audit (voucher_id, action, user_id, before_json) VALUES (?, ?, ?, ?)').run(cur.id, `cancelled: ${reason}`, req.user.id, JSON.stringify(cur));
+      cancel(cur, reason);
+      if (reversal) cancel(voucherFull(reversal.id), `${reason} (with ${cur.voucher_no})`);
     })();
-    res.json({ ok: true });
+    res.json({ ok: true, also_cancelled: reversal ? reversal.voucher_no : undefined });
   },
   sync(req, res) {
     const from = req.body?.from, to = req.body?.to;
