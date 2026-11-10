@@ -112,14 +112,19 @@ const DEFAULT_ROLES = [
     library: 'standard', transport: 'standard', inventory: 'standard', 'front-office': 'standard' }) },
 ];
 
+// Express matches routes regardless of case and trailing slash, so compare on the same terms; otherwise
+// '/api/Fees' would reach the fees routes while matching no area and slip past the role's restrictions.
+const normPath = (path) => String(path || '').split('?')[0].toLowerCase().replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1');
+
 function areaForPath(path) {
+  path = normPath(path);
   for (const [prefix, area] of API_AREAS) {
     if (path === prefix || path.startsWith(prefix + '/') || path.startsWith(prefix + '?')) return area;
   }
   return null;
 }
 
-const isSelfService = (method, path) => SELF_SERVICE.some(([re]) => re.test(`${method} ${path}`));
+const isSelfService = (method, path) => SELF_SERVICE.some(([re]) => re.test(`${method} ${normPath(path)}`));
 
 const roleFor = (level) => (level === 'full' ? 'admin' : 'teacher');
 
@@ -151,5 +156,5 @@ function normalizePerms(perms) {
 
 module.exports = {
   AREAS, AREA_KEYS, LEVELS, DEFAULT_ROLES, REPORT_GROUP_AREAS,
-  areaForPath, isSelfService, effectiveRole, roleInArea, normalizePerms,
+  areaForPath, isSelfService, effectiveRole, roleInArea, normalizePerms, normPath,
 };

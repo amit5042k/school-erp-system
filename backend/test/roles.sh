@@ -65,6 +65,11 @@ check "IT head can't change own role" "$(code -X POST $B/users/$ITID/role -H "$(
 check "IT head can't edit own role perms" "$(code -X PUT $B/roles/it-head -H "$(H $IT)" -H "$C" -d '{"perms":{"finance":"full"}}')" 403
 check "IT head reads backups list" "$(code $B/admin/backups -H "$(H $IT)")" 200
 check "IT head blocked from fees" "$(code $B/fees -H "$(H $IT)")" 403
+# URL letter case or a trailing slash must not get around a role's restrictions (Express ignores both).
+check "IT head blocked from /Payments/dues" "$(code "$B/Payments/dues?student_id=1" -H "$(H $IT)")" 403
+check "IT head blocked from /PAYMENTS/dues/" "$(code "$B/PAYMENTS/dues/?student_id=1" -H "$(H $IT)")" 403
+check "staff blocked from /Student-Leave" "$(code $B/Student-Leave -H "$(H $ST)")" 403
+check "staff blocked from /API/student-leave" "$(code ${B%/api}/API/student-leave -H "$(H $ST)")" 403
 check "accountant opens accounts" "$(code $B/accounts/summary -H "$(H $AC)")" 200
 check "clerk blocked from accounts" "$(code $B/accounts/summary -H "$(H $CL)")" 403
 check "teacher blocked from accounts" "$(code $B/accounts/vouchers -H "$(H $CO)")" 403

@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const { authRequired } = require('../middleware/auth');
-const { areaForPath, isSelfService, AREAS } = require('../utils/permissions');
+const { areaForPath, isSelfService, normPath, AREAS } = require('../utils/permissions');
 const { today } = require('../utils/http');
 
 const SERVER_URL = (process.env.LICENSE_SERVER_URL || '').replace(/\/+$/, '');
@@ -34,6 +34,8 @@ if (!publicKey && process.env.LICENSE_PUBLIC_KEY_FILE) {
   try { publicKey = fs.readFileSync(process.env.LICENSE_PUBLIC_KEY_FILE, 'utf8'); }
   catch (e) { console.error('Licence: cannot read LICENSE_PUBLIC_KEY_FILE:', e.message); }
 }
+// A key was configured but couldn't be loaded: refuse every licence rather than accept unsigned ones.
+const keyMissing = !publicKey && !!process.env.LICENSE_PUBLIC_KEY_FILE;
 
 // Student cap enforced in the database too, so no code path can go past it.
 db.exec(`
@@ -41,6 +43,11 @@ db.exec(`
   INSERT OR IGNORE INTO licence_limits (id, max_students) VALUES (1, NULL);
   CREATE TRIGGER IF NOT EXISTS trg_licence_student_cap BEFORE INSERT ON students
   WHEN (SELECT max_students FROM licence_limits WHERE id = 1) IS NOT NULL
+   AND (SELECT COUNT(*) FROM students WHERE COALESCE(status, 'active') = 'active') >= (SELECT max_students FROM licence_limits WHERE id = 1)
+  BEGIN SELECT RAISE(ABORT, 'LICENCE_STUDENT_CAP'); END;
+  CREATE TRIGGER IF NOT EXISTS trg_licence_student_cap_reactivate BEFORE UPDATE OF status ON students
+  WHEN COALESCE(NEW.status, 'active') = 'active' AND COALESCE(OLD.status, 'active') <> 'active'
+   AND (SELECT max_students FROM licence_limits WHERE id = 1) IS NOT NULL
    AND (SELECT COUNT(*) FROM students WHERE COALESCE(status, 'active') = 'active') >= (SELECT max_students FROM licence_limits WHERE id = 1)
   BEGIN SELECT RAISE(ABORT, 'LICENCE_STUDENT_CAP'); END;
 `);
@@ -51,6 +58,7 @@ const activeStudents = () => db.prepare("SELECT COUNT(*) AS c FROM students WHER
 function readLicence(raw) {
   const text = typeof raw === 'string' ? raw.trim() : null;
   const looksJwt = text && /^[\w-]+\.[\w-]+\.[\w-]+$/.test(text);
+  if (keyMissing) throw new Error('licence public key could not be read');
   if (publicKey) {
     const token = looksJwt ? text : raw && raw.token;
     if (!token) throw new Error('licence is not signed');
@@ -96,6 +104,7 @@ async function refresh(force = false) {
   if (inflight) return inflight;
   lastAttempt = Date.now();
   inflight = (async () => {
+    await null; // let `inflight` be assigned before the finally below clears it (file mode has no other await)
     try {
       if (MODE === 'file') {
         const raw = fs.readFileSync(FILE, 'utf8');
@@ -146,7 +155,7 @@ const STUDENT_CREATE = [/^POST \/students$/, /^POST \/stu\/admission$/];
 
 async function guard(req, res, next) {
   if (MODE === 'unlimited') return next();
-  const p = req.path; // already without the /api mount
+  const p = normPath(req.path); // already without the /api mount
   if (ALWAYS_OPEN.test(p) || req.method === 'OPTIONS') return next();
   try { await refresh(); } catch (_) { /* state() handles a missing licence */ }
   const s = state();

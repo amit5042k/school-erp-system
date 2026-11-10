@@ -101,7 +101,7 @@ function Counts() {
       <Flash msg={msg} />
       <div className="card p-4 mb-3 flex flex-wrap gap-3 items-end text-sm">
         <div><label className="label">Date</label><input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
-        <div className="text-xs text-gray-500">Record how many plates were served. &ldquo;Present&rdquo; is from that day&apos;s roll call.</div>
+        <div className="text-xs text-gray-500">Record how many plates were served. &ldquo;Present&rdquo; is boarders marked present or late at any of that day&apos;s roll calls, each counted once.</div>
         <Link href="/report/hostel-meal-counts" className="ml-auto btn bg-gray-200 text-sm">Meal Count Report</Link>
       </div>
       <div className="card p-4 overflow-x-auto">

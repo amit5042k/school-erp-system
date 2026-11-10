@@ -111,7 +111,15 @@ function initDatabase(env, schoolName) {
   });
 }
 
-async function createSchool(body, ownerId) {
+// One school at a time: port allocation awaits, so two creates running together could pick the same port.
+let creating = Promise.resolve();
+function createSchool(body, ownerId) {
+  const run = creating.then(() => createSchoolNow(body, ownerId));
+  creating = run.catch(() => {});
+  return run;
+}
+
+async function createSchoolNow(body, ownerId) {
   const code = String(body.code || '').trim().toLowerCase();
   const subdomain = String(body.subdomain || code).trim().toLowerCase();
   if (!CODE_RE.test(code)) throw httpError(400, 'Code: 2–20 lowercase letters/digits, starting with a letter (e.g. dps2)');
@@ -128,8 +136,6 @@ async function createSchool(body, ownerId) {
   if (fs.existsSync(dir)) throw httpError(409, `Folder ${dir} already exists; archive or remove it first`);
   const port = await allocatePort();
   const key = newKey();
-  for (const sub of ['data', 'uploads', 'backups']) fs.mkdirSync(path.join(dir, sub), { recursive: true, mode: 0o750 });
-
   const info = db.prepare(`
     INSERT INTO schools (code, name, subdomain, plan_id, status, starts_on, expires_on, max_students, port, licence_key, licence_key_hash,
       contact_name, contact_phone, contact_email, notes)
@@ -138,6 +144,7 @@ async function createSchool(body, ownerId) {
     d.contact_name ?? null, d.contact_phone ?? null, d.contact_email ?? null, d.notes ?? null);
   const school = db.prepare('SELECT * FROM schools WHERE id = ?').get(info.lastInsertRowid);
   try {
+    for (const sub of ['data', 'uploads', 'backups']) fs.mkdirSync(path.join(dir, sub), { recursive: true, mode: 0o750 });
     const env = writeSchoolEnv(school, crypto.randomBytes(32).toString('hex'));
     const admin = await initDatabase(env, school.name);
     const files = writeAll();

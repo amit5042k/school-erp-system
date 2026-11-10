@@ -1,5 +1,6 @@
 // Live bus tracking: a driver's phone posts its location during a trip; families see their child's bus on a map.
 const { db, ROLES, auth, role, safe, isStaff } = require('./_kit');
+const { familyUserIds } = require('../utils/family');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS gps_trips (
@@ -39,7 +40,8 @@ db.exec(`
 const TRAIL_POINTS = 400;          // kept per trip; older points are dropped
 const KEEP_DAYS = 3;               // trips older than this lose their trail
 const MIN_INTERVAL_MS = 5000;      // ignore points sent faster than this
-const STALE_TRIP_HOURS = 6;        // a trip with no update for this long is ended automatically
+const STALE_TRIP_HOURS = 2;        // a trip with no update for this long is ended automatically
+const NO_SIGNAL_MS = 3 * 60000;    // a live trip with no update for this long is shown as "no signal"
 const ARRIVING_METERS = 600;
 const err = (status, message) => Object.assign(new Error(message), { status });
 const nowIso = () => new Date().toISOString();
@@ -79,10 +81,10 @@ function familyRouteIds(user) {
   if (!user.linked_id) return [];
   return db.prepare('SELECT route_id FROM student_transport WHERE student_id = ?').all(user.linked_id).map(r => r.route_id);
 }
-const familiesOnRoute = (routeId, stopName) => db.prepare(`
-  SELECT u.id FROM student_transport st JOIN users u ON u.linked_id = st.student_id
-  WHERE st.route_id = ? AND u.active = 1 AND u.role IN ('student','parent') AND (? IS NULL OR LOWER(TRIM(st.pickup_stop)) = LOWER(?))`)
-  .all(routeId, stopName ?? null, stopName ?? null).map(r => r.id);
+const familiesOnRoute = (routeId, stopName) => familyUserIds(db.prepare(`
+  SELECT st.student_id FROM student_transport st
+  WHERE st.route_id = ? AND (? IS NULL OR LOWER(TRIM(st.pickup_stop)) = LOWER(?))`)
+  .all(routeId, stopName ?? null, stopName ?? null).map(r => r.student_id));
 function notify(userIds, title, body) {
   try { require('./push').notify(userIds, { title, body, link: '/bus-tracking', kind: 'bus' }).catch(() => {}); } catch (_) { /* optional */ }
 }
@@ -110,8 +112,10 @@ const api = {
     const direction = req.body.direction === 'drop' ? 'drop' : 'pickup';
     const running = db.prepare("SELECT * FROM gps_trips WHERE vehicle_id = ? AND status = 'active'").get(vehicleId);
     if (running) {
-      if (running.driver_user_id === req.user.id) return res.json({ id: running.id, resumed: true });
-      if (!req.body.take_over) throw err(409, `${vehicle.vehicle_no} already has a trip running. Ask the other driver to end it, or take it over.`);
+      // Same driver, same trip: carry on. A different direction or route means the old trip is over.
+      const same = running.direction === direction && (running.route_id || null) === routeId;
+      if (running.driver_user_id === req.user.id && same) return res.json({ id: running.id, resumed: true });
+      if (running.driver_user_id !== req.user.id && !req.body.take_over) throw err(409, `${vehicle.vehicle_no} already has a trip running. Ask the other driver to end it, or take it over.`);
       db.prepare("UPDATE gps_trips SET status = 'ended', ended_at = ? WHERE id = ?").run(nowIso(), running.id);
     }
     const info = db.prepare('INSERT INTO gps_trips (vehicle_id, route_id, direction, driver_user_id, started_at) VALUES (?, ?, ?, ?, ?)')
@@ -166,11 +170,16 @@ const api = {
     if (!staff && !routeIds.length) return res.json({ trips: [], routes: [], message: 'Your child is not assigned to a bus route.' });
     const trips = db.prepare(`${TRIP_SELECT} WHERE t.status = 'active' ORDER BY v.vehicle_no`).all()
       .filter(t => staff || routeIds.includes(t.route_id))
-      .map(t => ({
-        id: t.id, vehicle_no: t.vehicle_no, route_id: t.route_id, route_name: t.route_name, direction: t.direction, started_at: t.started_at,
-        driver: t.driver_user_name || t.driver_name, driver_phone: staff ? t.driver_phone : (t.driver_phone || null),
-        lat: t.last_lat, lng: t.last_lng, speed: t.last_speed, heading: t.last_heading, accuracy: t.last_accuracy, last_at: t.last_at,
-      }));
+      .map(t => {
+        const silentMs = Date.now() - Date.parse(t.last_at || t.started_at);
+        return {
+          id: t.id, vehicle_no: t.vehicle_no, route_id: t.route_id, route_name: t.route_name, direction: t.direction, started_at: t.started_at,
+          driver: t.driver_user_name || t.driver_name, driver_phone: staff ? t.driver_phone : (t.driver_phone || null),
+          lat: t.last_lat, lng: t.last_lng, speed: t.last_speed, heading: t.last_heading, accuracy: t.last_accuracy, last_at: t.last_at,
+          // No position for a few minutes: the driver's phone has lost signal or stopped sending.
+          stale: silentMs > NO_SIGNAL_MS, silent_min: Math.floor(silentMs / 60000),
+        };
+      });
     const ids = staff ? [...new Set([...trips.map(t => t.route_id).filter(Boolean)])] : routeIds;
     const routes = ids.map(id => ({ id, name: db.prepare('SELECT name FROM routes WHERE id = ?').get(id)?.name, stops: stopsOf(id) }));
     const myStop = staff ? null : db.prepare('SELECT pickup_stop FROM student_transport WHERE student_id = ?').get(req.user.linked_id)?.pickup_stop || null;
@@ -205,6 +214,7 @@ const api = {
     res.json({ ok: true });
   },
   history(req, res) {
+    endStaleTrips();
     res.json(db.prepare(`${TRIP_SELECT} ORDER BY t.id DESC LIMIT 100`).all().map(t => ({ ...t, points: db.prepare('SELECT COUNT(*) AS c FROM gps_points WHERE trip_id = ?').get(t.id).c })));
   },
 };

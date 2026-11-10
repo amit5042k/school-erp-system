@@ -77,12 +77,13 @@ function waNumber(to) {
 async function viaGateway({ url, method, bodyTemplate, headers }, to, text) {
   const enc = (v) => encodeURIComponent(v);
   const m = (method || 'GET').toUpperCase();
-  const target = url.replace('{to}', enc(to)).replace('{message}', enc(text));
+  const target = url.replace('{to}', () => enc(to)).replace('{message}', () => enc(text));
   const opts = { method: m, headers: { ...(headers || {}) } };
   if (m === 'POST' && bodyTemplate) {
     const json = (v) => JSON.stringify(v).slice(1, -1);
     opts.headers['Content-Type'] = 'application/json';
-    opts.body = bodyTemplate.replace('{to}', json(to)).replace('{message}', json(text));
+    // Function replacements: a '$&' or "$'" in the message must not be read as a replacement pattern.
+    opts.body = bodyTemplate.replace('{to}', () => json(to)).replace('{message}', () => json(text));
   }
   const res = await fetch(target, opts);
   if (!res.ok) throw new Error(`Gateway responded ${res.status}`);

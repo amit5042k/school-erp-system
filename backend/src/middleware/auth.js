@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const roles = require('../utils/roles');
 const { effectiveRole } = require('../utils/permissions');
+const { isParentOf } = require('../utils/family');
 
 const loadUser = db.prepare('SELECT id, username, role, role_key, full_name, linked_id, active, must_change_password, blocked_reason FROM users WHERE id = ?');
 
@@ -32,7 +33,7 @@ function authRequired(req, res, next) {
   if (staffRole) {
     req.user.role_key = staffRole.key;
     req.user.perms = staffRole.perms;
-    const eff = effectiveRole(staffRole.perms, req.method, path.replace(/^\/api/, ''));
+    const eff = effectiveRole(staffRole.perms, req.method, path.replace(/^\/api(?=\/|$)/i, ''));
     if (eff.deny) return res.status(403).json({ error: `Your role (${staffRole.name}) does not have access to ${eff.deny}`, code: 'AREA_DENIED' });
     req.user.role = eff.role;
   }
@@ -52,7 +53,10 @@ const isStaff = (user) => user.role === 'admin' || user.role === 'teacher';
 // Students and parents may only see the student record their account is linked to.
 function canSeeStudent(user, studentId) {
   if (isStaff(user)) return true;
-  return user.linked_id != null && Number(studentId) === Number(user.linked_id);
+  if (user.linked_id != null && Number(studentId) === Number(user.linked_id)) return true;
+  // A parent can act for any of their children, not only the one currently selected (another phone on the same
+  // login may have switched child in the middle of, say, an online payment).
+  return (user.base_role || user.role) === 'parent' && isParentOf(user.id, studentId);
 }
 
 function ownStudentOnly(param = 'studentId') {

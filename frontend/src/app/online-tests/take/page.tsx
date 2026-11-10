@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, fileUrl } from '@/lib/api';
-import { Flash, useFlash } from '../_ui';
+import { Flash, NoTest, useFlash } from '../_ui';
 
 type Question = { id: number; text: string; image_url: string | null; marks: number; negative: number; multiple: boolean; options: { id: number; text: string }[] };
 type Paper = {
@@ -31,6 +31,7 @@ export default function TakeTestPage({ searchParams }: { searchParams: { id?: st
   answersRef.current = answers;
 
   useEffect(() => {
+    if (!searchParams.id) return;
     api<Paper>(`/online-tests/${searchParams.id}/start`, { method: 'POST', body: '{}' }).then(p => {
       setPaper(p); setAnswers(p.answers || {});
       setSkew(Date.parse(p.server_time) - Date.now());
@@ -38,19 +39,27 @@ export default function TakeTestPage({ searchParams }: { searchParams: { id?: st
     /* eslint-disable-next-line */
   }, [searchParams.id]);
 
-  const save = useCallback(async (submit = false) => {
+  // retries: extra tries 3 s apart, used at time-up so a dropped connection doesn't lose the last answers
+  // (the server still accepts them for 15 s after the deadline).
+  const save = useCallback(async (submit = false, retries = 0) => {
     if (!paper || done) return;
     setSaved('saving');
-    try {
-      await api(`/online-tests/attempts/${paper.attempt_id}${submit ? '/submit' : ''}`, {
-        method: submit ? 'POST' : 'PUT', body: JSON.stringify({ answers: answersRef.current }),
-      });
-      dirty.current = false;
-      setSaved('saved');
-      if (submit) setDone('Your answers have been submitted.');
-    } catch (e: any) {
-      setSaved('error');
-      if (/submitted|Time is up/.test(e.message)) setDone(e.message); else if (submit) flash(e.message, false);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await api(`/online-tests/attempts/${paper.attempt_id}${submit ? '/submit' : ''}`, {
+          method: submit ? 'POST' : 'PUT', body: JSON.stringify({ answers: answersRef.current }),
+        });
+        dirty.current = false;
+        setSaved('saved');
+        if (submit) setDone('Your answers have been submitted.');
+        return;
+      } catch (e: any) {
+        if (/submitted|Time is up/.test(e.message)) { setSaved('error'); setDone(e.message); return; }
+        if (attempt < retries) { await new Promise(r => setTimeout(r, 3000)); continue; }
+        setSaved('error');
+        if (submit) flash(e.message, false);
+        return;
+      }
     }
   }, [paper, done, flash]);
 
@@ -60,7 +69,7 @@ export default function TakeTestPage({ searchParams }: { searchParams: { id?: st
     const tick = setInterval(() => {
       const ms = Date.parse(paper.deadline_at) - (Date.now() + skew);
       setLeft(ms);
-      if (ms <= 0) { clearInterval(tick); save(true); }
+      if (ms <= 0) { clearInterval(tick); save(true, 4); }
     }, 1000);
     const autosave = setInterval(() => { if (dirty.current) save(false); }, 10000);
     return () => { clearInterval(tick); clearInterval(autosave); };
@@ -94,6 +103,7 @@ export default function TakeTestPage({ searchParams }: { searchParams: { id?: st
       </div>
     </Shell>
   );
+  if (!searchParams.id) return <Shell><NoTest /></Shell>;
   if (!paper) return <Shell><Flash msg={msg} />{!msg && <div className="text-gray-500">Opening your test…</div>}<Link href="/online-tests" className="text-brand-600 underline text-sm">Back to Online Tests</Link></Shell>;
 
   const q = paper.questions[current];

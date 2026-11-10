@@ -7,11 +7,13 @@ import { api, getUser } from '@/lib/api';
 import { Flash, ago, busIcon, escapeHtml, stopIcon, useFlash, useLeafletMap, when } from './_map';
 
 type Trip = { id: number; vehicle_no: string; route_id: number | null; route_name: string | null; direction: string; started_at: string;
-  driver: string | null; driver_phone: string | null; lat: number | null; lng: number | null; speed: number | null; last_at: string | null };
+  driver: string | null; driver_phone: string | null; lat: number | null; lng: number | null; speed: number | null; last_at: string | null;
+  stale?: boolean; silent_min?: number };
 type Stop = { id: number | null; name: string; lat: number | null; lng: number | null };
 type Live = { trips: Trip[]; routes: { id: number; name: string; stops: Stop[] }[]; my_stop: string | null; message?: string };
 
 const POLL_MS = 15000;
+const noSignal = (t: Trip) => (t.last_at ? `No signal for ${t.silent_min ?? 0} min` : 'No position received yet');
 
 export default function BusTrackingPage() {
   const user = getUser<any>();
@@ -54,8 +56,9 @@ export default function BusTrackingPage() {
         const trail = trails[i].map(p => [p.lat, p.lng]);
         if (trail.length > 1) L.polyline(trail, { color: '#2563eb', weight: 4, opacity: 0.6 }).addTo(g);
         if (t.lat == null || t.lng == null) return;
-        L.marker([t.lat, t.lng], { icon: busIcon(L, t.vehicle_no, !staff) })
+        L.marker([t.lat, t.lng], { icon: busIcon(L, t.vehicle_no, !staff, t.stale) })
           .bindPopup(escapeHtml(`${t.vehicle_no} · ${t.route_name || 'No route'} (${t.direction})`) + `<br/>Updated ${ago(t.last_at)}`
+            + (t.stale ? `<br/><b>${escapeHtml(noSignal(t))} – last known position</b>` : '')
             + (t.speed != null ? `<br/>${Math.round(t.speed * 3.6)} km/h` : '')).addTo(g);
         pts.push([t.lat, t.lng]);
       });
@@ -89,7 +92,8 @@ export default function BusTrackingPage() {
           {live?.trips.map(t => (
             <button key={t.id} onClick={() => setFollow(f => (f === t.id ? null : t.id))}
               className={`card p-3 w-full text-left text-sm ${follow === t.id ? 'ring-2 ring-brand-600' : ''}`}>
-              <div className="flex justify-between"><span className="font-semibold text-brand-700">🚌 {t.vehicle_no}</span><span className="badge badge-green capitalize">{t.direction}</span></div>
+              <div className="flex justify-between"><span className={`font-semibold ${t.stale ? 'text-gray-500' : 'text-brand-700'}`}>🚌 {t.vehicle_no}</span><span className={`badge capitalize ${t.stale ? 'badge-gray' : 'badge-green'}`}>{t.direction}</span></div>
+              {t.stale && <div className="text-xs font-semibold text-amber-700">{noSignal(t)} – the map shows the last known position</div>}
               <div className="text-xs text-gray-600">{t.route_name || 'No route'}</div>
               <div className="text-xs text-gray-500">Started {when(t.started_at)} · updated {ago(t.last_at)}</div>
               {t.driver && <div className="text-xs text-gray-500">Driver: {t.driver}{t.driver_phone ? <> · <a className="text-brand-600" href={`tel:${t.driver_phone}`} onClick={e => e.stopPropagation()}>{t.driver_phone}</a></> : null}</div>}

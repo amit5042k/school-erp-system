@@ -50,9 +50,10 @@ export function useLeafletMap(height = 480) {
   return { el, map, error, L: typeof window !== 'undefined' ? (window as any).L : null };
 }
 
-export const busIcon = (L: any, label: string, mine = false) => L.divIcon({
+// stale: no position for a few minutes, so the marker is greyed out and marked as the last known spot.
+export const busIcon = (L: any, label: string, mine = false, stale = false) => L.divIcon({
   className: '',
-  html: `<div style="background:${mine ? '#16a34a' : '#1d4ed8'};color:#fff;border-radius:6px;padding:2px 6px;font:600 11px sans-serif;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.4)">🚌 ${label.replace(/[<>&"]/g, '')}</div>`,
+  html: `<div style="background:${stale ? '#9ca3af' : mine ? '#16a34a' : '#1d4ed8'};color:#fff;border-radius:6px;padding:2px 6px;font:600 11px sans-serif;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.4)${stale ? ';opacity:.85' : ''}">🚌 ${label.replace(/[<>&"]/g, '')}${stale ? ' · no signal' : ''}</div>`,
   iconAnchor: [20, 10],
 });
 

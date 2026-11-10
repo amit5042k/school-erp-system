@@ -395,7 +395,8 @@ const VALIDATORS = {
     if (u) {
       const linked = db.prepare('SELECT 1 FROM parent_children WHERE parent_user_id = ? AND student_id = ?').get(u.id, st.id);
       if (linked && mode !== 'update') return { action: 'skip', data: d, id: u.id, note: `Already linked to ${st.full_name}` };
-      return { action: mode === 'update' || !linked ? 'update' : 'skip', data: d, id: u.id, note: linked ? 'Existing parent login' : `Link existing parent to ${st.full_name}` };
+      // In skip mode an existing parent is only linked to the new child; their name, contact and password stay as they are.
+      return { action: 'update', linkOnly: mode !== 'update', data: d, id: u.id, note: linked ? 'Existing parent login' : `Link existing parent to ${st.full_name}` };
     }
     const sibling = ctx.newUsers.get(d.username.toLowerCase());
     ctx.newUsers.set(d.username.toLowerCase(), ctx.row);
@@ -462,6 +463,7 @@ const APPLY = {
   parents(v, mapped, out) {
     const d = v.data;
     let u = userByName.get(d.username);
+    if (v.linkOnly) { linkChild(u.id, d.student_id); return; }
     if (!u) {
       const pw = d.password || tempPassword();
       const id = db.prepare(`INSERT INTO users (username, password_hash, role, full_name, email, phone, linked_id, must_change_password)
@@ -483,7 +485,8 @@ const APPLY = {
     const pw = d.password || tempPassword();
     if (v.action === 'update') {
       const u = db.prepare('SELECT username FROM users WHERE id = ?').get(v.id);
-      db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1, active = 1 WHERE id = ?').run(bcrypt.hashSync(pw, 10), v.id);
+      // Resets the password only; a login the school switched off (e.g. a student who left) stays off.
+      db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(bcrypt.hashSync(pw, 10), v.id);
       out.credentials.push({ username: u.username, password: pw, name: st.full_name, role: 'student' });
       return;
     }
@@ -581,12 +584,15 @@ function commit(req, res) {
         results.push(v);
       } catch (e) {
         out.failed++;
-        const msg = /UNIQUE/.test(e.message) ? 'Already exists (duplicate)' : /FOREIGN KEY/.test(e.message) ? 'Refers to a record that does not exist' : 'Could not be saved';
+        const msg = /LICENCE_STUDENT_CAP/.test(e.message) ? 'Student limit of your plan reached' : /UNIQUE/.test(e.message) ? 'Already exists (duplicate)' : /FOREIGN KEY/.test(e.message) ? 'Refers to a record that does not exist' : 'Could not be saved';
         results.push({ ...v, action: 'error', errors: [msg] });
       }
     }
-    db.prepare('UPDATE imp_batches SET results = ?, committed_at = ? WHERE id = ?')
-      .run(JSON.stringify(results.map(r => ({ n: r.n, values: r.values, action: r.action, errors: r.errors || [] }))), new Date().toISOString(), b.id);
+    // Passwords typed into the sheet are not kept once imported (the database is copied to off-site backups).
+    const scrub = (values) => { if (!values || !('password' in values)) return values; const { password, ...rest } = values; return rest; };
+    db.prepare('UPDATE imp_batches SET rows = ?, results = ?, committed_at = ? WHERE id = ?')
+      .run(JSON.stringify({ rows: [], mapped: [...b.mapped] }),
+        JSON.stringify(results.map(r => ({ n: r.n, values: scrub(r.values), action: r.action, errors: r.errors || [] }))), new Date().toISOString(), b.id);
     db.prepare('INSERT INTO imp_history (type, file_name, mode, user_id, total, created, updated, skipped, failed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(type, b.file_name, mode, req.user.id, results.length, out.created, out.updated, out.skipped, out.failed);
   })();

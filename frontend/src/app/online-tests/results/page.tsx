@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api } from '@/lib/api';
-import { Flash, STATE_UI, useFlash, when } from '../_ui';
+import { Flash, NoTest, STATE_UI, useFlash, when } from '../_ui';
 
 type Results = {
   test: { id: number; title: string; subject: string | null; status: string; end_at: string; results_released: number; total_marks: number; questions: number };
@@ -20,7 +20,7 @@ export default function TestResultsPage({ searchParams }: { searchParams: { id?:
   const [tab, setTab] = useState<'students' | 'questions'>('students');
   const { msg, flash } = useFlash();
   const load = () => api<Results>(`/online-tests/${searchParams.id}/results`).then(setR).catch(e => flash(e.message, false));
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [searchParams.id]);
+  useEffect(() => { if (searchParams.id) load(); /* eslint-disable-next-line */ }, [searchParams.id]);
 
   async function release(released: boolean) {
     try { await api(`/online-tests/${searchParams.id}/release`, { method: 'POST', body: JSON.stringify({ released }) }); flash(released ? 'Results released to students and parents.' : 'Results hidden.'); load(); }
@@ -28,6 +28,7 @@ export default function TestResultsPage({ searchParams }: { searchParams: { id?:
   }
 
   const ended = r && (r.test.status === 'closed' || Date.parse(r.test.end_at) <= Date.now());
+  if (!searchParams.id) return <Shell><NoTest /></Shell>;
   return (
     <Shell>
       <div className="text-xs text-gray-500 mb-1 no-print"><Link href="/online-tests" className="hover:underline">Online Tests</Link> › Results</div>

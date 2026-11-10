@@ -146,6 +146,8 @@ const h = {
       prefill: { name: s.full_name, contact: s.contact || '', email: s.email || '' } });
   },
   verify(req, res) {
+    // Without a secret the signature check below would pass for anyone who computes HMAC('', ...).
+    if (!configured()) throw httpError(400, 'Online payment is not set up');
     const { razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: sig } = req.body || {};
     if (!orderId || !paymentId || !sig) throw httpError(400, 'Missing payment details');
     const p = db.prepare('SELECT * FROM online_payments WHERE order_id = ?').get(orderId);

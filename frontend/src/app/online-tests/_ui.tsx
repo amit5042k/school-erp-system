@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 export type Msg = { ok: boolean; text: string } | null;
@@ -15,6 +16,16 @@ export function Flash({ msg }: { msg: Msg }) {
   return (
     <div className={`text-sm rounded px-3 py-2 mb-3 border no-print ${msg.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
       {msg.text}
+    </div>
+  );
+}
+
+/** Shown when a test page is opened without ?id= (an old bookmark or a hand-typed address). */
+export function NoTest() {
+  return (
+    <div className="card p-6 max-w-lg mx-auto text-center">
+      <p className="text-gray-700 mb-4">No test selected.</p>
+      <Link href="/online-tests" className="btn btn-primary">Back to Online Tests</Link>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, fileUrl } from '@/lib/api';
-import { Flash, useFlash, when } from '../_ui';
+import { Flash, NoTest, useFlash, when } from '../_ui';
 
 type MyResult = {
   test: { id: number; title: string; subject?: string | null }; attempted: boolean; released: boolean; submitted_at?: string;
@@ -18,8 +18,9 @@ const OUTCOME = { correct: ['Correct', 'badge-green'], wrong: ['Wrong', 'badge-r
 export default function MyTestResultPage({ searchParams }: { searchParams: { id?: string } }) {
   const [r, setR] = useState<MyResult | null>(null);
   const { msg, flash } = useFlash();
-  useEffect(() => { api<MyResult>(`/online-tests/${searchParams.id}/my-result`).then(setR).catch(e => flash(e.message, false)); /* eslint-disable-next-line */ }, [searchParams.id]);
+  useEffect(() => { if (!searchParams.id) return; api<MyResult>(`/online-tests/${searchParams.id}/my-result`).then(setR).catch(e => flash(e.message, false)); /* eslint-disable-next-line */ }, [searchParams.id]);
 
+  if (!searchParams.id) return <Shell><NoTest /></Shell>;
   return (
     <Shell>
       <div className="text-xs text-gray-500 mb-1 no-print"><Link href="/online-tests" className="hover:underline">Online Tests</Link> › Result</div>

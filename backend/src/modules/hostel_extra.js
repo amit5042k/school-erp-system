@@ -1,5 +1,7 @@
 // Hostel operations: daily roll call, mess menu and meal counts, monthly mess fees, visitor log and out-passes.
 const { db, ROLES, auth, role, safe, isStaff, isDate, today, num, currentSession, registerReport } = require('./_kit');
+const { familyUserIds } = require('../utils/family');
+const { roleInArea } = require('../utils/permissions');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS hx_roll_call (
@@ -90,8 +92,7 @@ function residents(hostelId) {
 const residentOf = (studentId) => db.prepare(`
   SELECT r.hostel_id, r.room_no, h.name AS hostel_name FROM hostel_allotments a JOIN hostel_rooms r ON r.id = a.room_id
   JOIN hostels h ON h.id = r.hostel_id WHERE a.student_id = ? AND a.vacated_on IS NULL`).get(studentId);
-const familyUsers = (studentId) => db.prepare(`SELECT id FROM users WHERE active = 1 AND role IN ('student','parent') AND linked_id = ?`)
-  .all(studentId).map(r => r.id);
+const familyUsers = (studentId) => familyUserIds([studentId]);
 function notify(userIds, title, body, link) {
   try { require('./push').notify(userIds, { title, body, link, kind: 'hostel' }).catch(() => {}); } catch (_) { /* optional */ }
 }
@@ -184,7 +185,8 @@ const mess = {
     if (!isDate(date)) throw err(400, 'date must be YYYY-MM-DD');
     const hostels = db.prepare('SELECT id, name FROM hostels ORDER BY name').all();
     const saved = db.prepare('SELECT * FROM hx_meal_counts WHERE date = ?').all(date);
-    const present = new Map(db.prepare(`SELECT hostel_id, COUNT(*) AS c FROM hx_roll_call WHERE date = ? AND status IN ('present','late')
+    // Boarders present (or late) at any roll call that day, each counted once however many sessions were marked.
+    const present = new Map(db.prepare(`SELECT hostel_id, COUNT(DISTINCT student_id) AS c FROM hx_roll_call WHERE date = ? AND status IN ('present','late')
       GROUP BY hostel_id`).all(date).map(r => [r.hostel_id, r.c]));
     res.json({ date, meals: MEALS, hostels: hostels.map(h => ({
       ...h, residents: residents(h.id).length, present: present.get(h.id) ?? null,
@@ -312,11 +314,15 @@ const outpass = {
     if (!reason) throw err(400, 'Enter a reason');
     if (!validTime(b.out_at) || !validTime(b.expected_return_at)) throw err(400, 'Enter when the student leaves and returns');
     if (Date.parse(b.expected_return_at) <= Date.parse(b.out_at)) throw err(400, 'Return time must be after leaving time');
+    const outAt = new Date(b.out_at).toISOString(), returnAt = new Date(b.expected_return_at).toISOString();
+    const clash = db.prepare(`SELECT out_at, expected_return_at, status FROM hx_outpasses WHERE student_id = ?
+      AND status IN ('requested','approved','out') AND out_at < ? AND expected_return_at > ?`).get(studentId, returnAt, outAt);
+    if (clash) throw err(409, `This student already has an out-pass (${clash.status}) from ${fmtWhen(clash.out_at)} to ${fmtWhen(clash.expected_return_at)}`);
     // Staff issue passes already approved; families' requests wait for the warden.
     const status = staffUser ? 'approved' : 'requested';
     const info = db.prepare(`INSERT INTO hx_outpasses (student_id, hostel_id, reason, destination, escort, out_at, expected_return_at, status,
       requested_by, decided_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(studentId, home.hostel_id, reason, text(b.destination),
-      text(b.escort, 120), new Date(b.out_at).toISOString(), new Date(b.expected_return_at).toISOString(), status, req.user.id, staffUser ? req.user.id : null);
+      text(b.escort, 120), outAt, returnAt, status, req.user.id, staffUser ? req.user.id : null);
     if (staffUser) notify(familyUsers(studentId), 'Out-pass issued', `Out-pass approved: leaving ${fmtWhen(b.out_at)}, back by ${fmtWhen(b.expected_return_at)}.`, '/hostel/my');
     res.status(201).json({ id: info.lastInsertRowid, status });
   },
@@ -428,9 +434,18 @@ registerReport({
     GROUP BY m.date, m.hostel_id ORDER BY m.date, h.name`).all(p.month),
 });
 
+// Mess fees create fee demands, so a custom staff role needs full Fees & Finance access as well as full Hostel access.
+function financeAdmin(req, res, next) {
+  if (req.user.perms && roleInArea(req.user.perms, 'finance') !== 'admin') {
+    return res.status(403).json({ error: 'Mess fees need full Fees & Finance access', code: 'AREA_DENIED' });
+  }
+  next();
+}
+
 function register(router) {
   const S = [auth, role(...ROLES.STAFF)];
   const A = [auth, role(...ROLES.ADMIN)];
+  const F = [...A, financeAdmin];
   router.get('/hostel-ops/my', auth, safe(mine));
   router.get('/hostel-ops/residents', ...S, safe((req, res) => res.json(residents(Number(req.query.hostel_id) || 0))));
   router.get('/hostel-ops/roll-call', ...S, safe(roll.sheet));
@@ -440,8 +455,8 @@ function register(router) {
   router.get('/hostel-ops/meal-counts', ...S, safe(mess.counts));
   router.put('/hostel-ops/meal-counts', ...S, safe(mess.saveCounts));
   router.get('/hostel-ops/mess-fees', ...A, safe(mess.feeSettings));
-  router.put('/hostel-ops/mess-fees', ...A, safe(mess.saveFeeSettings));
-  router.post('/hostel-ops/mess-fees/generate', ...A, safe(mess.generateFees));
+  router.put('/hostel-ops/mess-fees', ...F, safe(mess.saveFeeSettings));
+  router.post('/hostel-ops/mess-fees/generate', ...F, safe(mess.generateFees));
   router.get('/hostel-ops/visitors', ...S, safe(visitors.list));
   router.post('/hostel-ops/visitors', ...S, safe(visitors.create));
   router.post('/hostel-ops/visitors/:id/checkout', ...S, safe(visitors.checkout));

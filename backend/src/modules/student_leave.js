@@ -1,6 +1,7 @@
 // Student leave requests: parents/students apply, the class teacher (or an admin) decides,
 // and approved days are marked 'leave' in attendance without overwriting days already marked present.
 const { db, ROLES, auth, role, safe, isDate, badUrl } = require('./_kit');
+const { familyUserIds, isParentOf } = require('../utils/family');
 const { notify } = require('./push');
 
 db.exec(`
@@ -40,8 +41,7 @@ function datesBetween(from, to) {
 }
 const isSunday = (date) => new Date(`${date}T00:00:00Z`).getUTCDay() === 0;
 
-const familyUsers = (studentId) =>
-  db.prepare("SELECT id FROM users WHERE role IN ('student','parent') AND linked_id = ? AND active = 1").all(studentId).map(u => u.id);
+const familyUsers = (studentId) => familyUserIds([studentId]);
 const classTeacherUsers = (classTeacherId) => (classTeacherId
   ? db.prepare("SELECT id FROM users WHERE role = 'teacher' AND linked_id = ? AND active = 1").all(classTeacherId).map(u => u.id) : []);
 const adminUsers = () => db.prepare("SELECT id FROM users WHERE role = 'admin' AND active = 1").all().map(u => u.id);
@@ -67,7 +67,9 @@ const h = {
   create(req, res) {
     const b = req.body || {};
     let studentId = Number(b.student_id);
-    if (req.user.role === 'student' || req.user.role === 'parent') studentId = Number(req.user.linked_id);
+    // Students apply for themselves; a parent for the child they chose (any linked child), else the active one.
+    if (req.user.role === 'student') studentId = Number(req.user.linked_id);
+    else if (req.user.role === 'parent') { if (!(studentId && isParentOf(req.user.id, studentId))) studentId = Number(req.user.linked_id); }
     else if (req.user.role !== 'admin') throw httpError(403, 'Only parents, students or the office can apply for student leave');
     const s = studentId && db.prepare('SELECT s.id, s.full_name, s.status, c.class_teacher_id FROM students s LEFT JOIN classes c ON c.id = s.class_id WHERE s.id = ?').get(studentId);
     if (!s) throw httpError(400, 'Student not found');
@@ -93,7 +95,8 @@ const h = {
   cancel(req, res) {
     const r = db.prepare(`${SELECT} WHERE r.id = ?`).get(req.params.id);
     if (!r) throw httpError(404, 'Not found');
-    const own = (req.user.role === 'student' || req.user.role === 'parent') && r.student_id === req.user.linked_id;
+    const own = (req.user.role === 'student' && r.student_id === req.user.linked_id)
+      || (req.user.role === 'parent' && (r.student_id === req.user.linked_id || isParentOf(req.user.id, r.student_id)));
     if (!own && req.user.role !== 'admin') throw httpError(403, 'Forbidden');
     if (r.status !== 'pending') throw httpError(400, `This request is already ${r.status}`);
     db.prepare("UPDATE student_leave_requests SET status = 'cancelled', decided_at = ? WHERE id = ?").run(new Date().toISOString(), r.id);

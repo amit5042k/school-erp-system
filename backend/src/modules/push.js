@@ -7,9 +7,15 @@
 // Without credentials every notification still lands in the inbox; delivery is recorded as 'not_configured'.
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const { db, ROLES, auth, role, safe } = require('./_kit');
+const { db, ROLES, auth, role, safe, today } = require('./_kit');
+const { familyUserIds } = require('../utils/family');
 const events = require('../utils/events');
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS push_absent_log (
+    student_id INTEGER NOT NULL, date TEXT NOT NULL, PRIMARY KEY (student_id, date)
+  );
+`);
 db.exec(`
   CREATE TABLE IF NOT EXISTS push_devices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,11 +139,7 @@ const hasColumn = (table, col) => db.prepare(`PRAGMA table_info(${table})`).all(
 const activeUsers = (sql, ...p) => db.prepare(`SELECT id FROM users WHERE active = 1 AND ${sql}`).all(...p).map(r => r.id);
 
 // Student and parent logins of the given students.
-const familyOf = (studentIds) => {
-  const ids = [...new Set(studentIds.map(Number).filter(Boolean))];
-  if (!ids.length) return [];
-  return activeUsers(`role IN ('student','parent') AND linked_id IN (${ids.map(() => '?').join(',')})`, ...ids);
-};
+const familyOf = (studentIds) => familyUserIds(studentIds);
 const classFamilies = (classIds) => {
   const ids = [...new Set(classIds.map(Number).filter(Boolean))];
   if (!ids.length) return [];
@@ -189,11 +191,14 @@ const RULES = [
   {
     method: 'POST', re: /^\/api\/attendance\/bulk$/,
     run: ({ body }) => {
-      const absent = (body.records || []).filter(r => r && r.status === 'absent').map(r => r.student_id);
+      // Attendance is often saved several times a day; tell each family once per student and date.
+      const claim = db.prepare('INSERT OR IGNORE INTO push_absent_log (student_id, date) VALUES (?, ?)');
+      const absent = (body.records || []).filter(r => r && r.status === 'absent').map(r => Number(r.student_id))
+        .filter(sid => sid && claim.run(sid, String(body.date || '')).changes);
       return absent.map(sid => {
         const s = db.prepare('SELECT full_name FROM students WHERE id = ?').get(sid);
         return { to: familyOf([sid]), kind: 'attendance', link: '/dashboard',
-          title: 'Absent today', body: `${s?.full_name || 'Your child'} was marked absent on ${fmtDate(body.date)}.` };
+          title: body.date && body.date !== today() ? 'Marked absent' : 'Absent today', body: `${s?.full_name || 'Your child'} was marked absent on ${fmtDate(body.date)}.` };
       });
     },
   },

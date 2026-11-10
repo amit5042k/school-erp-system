@@ -17,7 +17,7 @@ const app = express();
 app.set('trust proxy', 1);
 // Uploaded files are loaded by the frontend from another origin (api. subdomain), so allow cross-origin reads.
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000', credentials: true, exposedHeaders: ['Content-Disposition', 'X-Voucher-Count'] }));
 // Device endpoints (e.g. eSSL ADMS at /iclock) speak plain text and live outside /api.
 require('./modules').registerRootModules(app);
 app.use(express.json({ limit: '1mb' }));
@@ -66,6 +66,10 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
   console.error(err);
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });
+  // The licence's student-limit trigger can fire from any route that adds or re-activates students.
+  if (String(err.message).includes('LICENCE_STUDENT_CAP')) {
+    return res.status(403).json({ error: 'Your plan\'s student limit has been reached. Contact your ERP provider to upgrade.', code: 'LICENCE_STUDENT_CAP' });
+  }
   const status = err.status || 500;
   res.status(status).json({ error: status >= 500 ? 'Something went wrong on the server' : err.message });
 });

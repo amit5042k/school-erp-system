@@ -2,6 +2,7 @@
 // window with a server-enforced timer; answers are graded automatically and released by the teacher.
 const crypto = require('crypto');
 const { db, ROLES, auth, role, safe, isStaff, num, badUrl, registerReport } = require('./_kit');
+const { familyUserIds } = require('../utils/family');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS ot_tests (
@@ -112,6 +113,19 @@ function cleanQuestion(q, i) {
   return { text, image_url: q.image_url || null, options: opts.map((t, id) => ({ id, text: t })), correct, marks: round2(marks), negative: round2(negative) };
 }
 
+// A teacher may set a test only for a class they teach: its class teacher or anyone timetabled for it. Admins may always.
+function assertTeachesClass(user, classIds) {
+  if (user.role === 'admin') return;
+  const teaches = db.prepare(`SELECT 1 FROM classes WHERE id = ? AND class_teacher_id = ?
+    UNION SELECT 1 FROM timetable WHERE class_id = ? AND teacher_id = ?`);
+  for (const id of classIds) {
+    if (!user.linked_id || !teaches.get(id, user.linked_id, id, user.linked_id)) {
+      const c = db.prepare('SELECT name, section FROM classes WHERE id = ?').get(id);
+      throw err(403, `You do not teach ${c ? `${c.name} ${c.section || ''}`.trim() : 'this class'}, so you cannot set a test for it`);
+    }
+  }
+}
+
 function cleanTest(b, existing) {
   const t = { ...existing, ...b };
   const title = String(t.title || '').trim();
@@ -172,9 +186,8 @@ function expireDue(testId) {
 function familyUsers(classIds) {
   if (!classIds.length) return [];
   const ph = classIds.map(() => '?').join(',');
-  return db.prepare(`SELECT u.id FROM users u JOIN students s ON s.id = u.linked_id
-    WHERE u.active = 1 AND u.role IN ('student','parent') AND s.class_id IN (${ph}) AND COALESCE(s.status, 'active') = 'active'`)
-    .all(...classIds).map(r => r.id);
+  return familyUserIds(db.prepare(`SELECT id FROM students WHERE class_id IN (${ph}) AND COALESCE(status, 'active') = 'active'`)
+    .all(...classIds).map(r => r.id));
 }
 function notifyFamilies(test, title, body, link) {
   try {
@@ -205,6 +218,7 @@ const staff = {
   },
   create(req, res) {
     const t = cleanTest(req.body, {});
+    assertTeachesClass(req.user, classIdsOf(t));
     const qs = (Array.isArray(req.body.questions) ? req.body.questions : []).map(cleanQuestion);
     const id = db.transaction(() => {
       const info = db.prepare(`INSERT INTO ot_tests (title, subject, class_id, all_sections, instructions, start_at, end_at, duration_min,
@@ -221,6 +235,7 @@ const staff = {
     const attempts = db.prepare('SELECT COUNT(*) AS c FROM ot_attempts WHERE test_id = ?').get(ex.id).c;
     if (attempts) throw err(409, 'Students have already started this test, so it can no longer be edited');
     const t = cleanTest(req.body, ex);
+    assertTeachesClass(req.user, classIdsOf(t));
     const qs = Array.isArray(req.body.questions) ? req.body.questions.map(cleanQuestion) : null;
     if (ex.status === 'published' && qs && !qs.length) throw err(400, 'A published test needs at least one question');
     db.transaction(() => {
@@ -250,6 +265,7 @@ const staff = {
     }
     if (t.status === 'published') return res.json({ ok: true, status: 'published' });
     if (!questionsOf(t.id).length) throw err(400, 'Add at least one question before publishing');
+    assertTeachesClass(req.user, classIdsOf(t));
     if (Date.parse(t.end_at) <= Date.now()) throw err(400, 'The closing time has already passed; change it before publishing');
     db.prepare("UPDATE ot_tests SET status = 'published', published_at = ? WHERE id = ?").run(nowIso(), t.id);
     notifyFamilies(t, `New online test: ${t.title}`, `${t.subject ? t.subject + ' · ' : ''}${t.duration_min} min. Opens ${fmtWhen(t.start_at)}, closes ${fmtWhen(t.end_at)}.`, `/online-tests/take?id=${t.id}`);
