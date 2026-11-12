@@ -69,6 +69,7 @@ const NAV: NavItem[] = [
   { label: 'Payroll Management',    href: '/payroll',               icon: '💰', roles: ['admin', 'teacher'] },
   { label: 'Inventory',             href: '/inventory',             icon: '📦', roles: ADMIN },
   { label: 'Item Requests',         href: '/inventory/requests',    icon: '📦', roles: ['teacher'] },
+  { label: 'My Attendance',         href: '/my-attendance',         icon: '🕘', roles: ['teacher'] },
   { label: 'Users & Roles',         href: '/users',                 icon: '🔐', roles: ADMIN },
   { label: 'Roles & Permissions',   href: '/roles',                 icon: '🛡', roles: ADMIN },
   { label: 'Bulk Import',           href: '/imports',               icon: '⇪', roles: ADMIN },

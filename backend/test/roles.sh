@@ -82,6 +82,10 @@ check "IT head can still create a teacher login" "$(code -X POST $B/users -H "$(
 # Nobody below Super Admin decides their own leave or sets their own salary.
 check "accountant can't change own salary structure" "$(code -X PUT $B/pay/structure/4 -H "$(H $AC)" -H "$C" -d '{"basic":99999}')" 403
 check "principal sees own payslips" "$(code $B/pay/my-slips -H "$(H $P)")" 200
+# Every staff member sees their own in/out times, even with no HR access; nobody else's.
+check "non-teaching staff sees own attendance" "$(code $B/hr/my-attendance -H "$(H $ST)")" 200
+check "non-teaching staff can't see staff attendance" "$(code "$B/hr/staff-attendance?date=2026-01-05" -H "$(H $ST)")" 403
+check "own attendance is the caller's record" "$(curl -s $B/hr/my-attendance -H "$(H $CL)" | j 'x.staff.id')" 5
 # Principal and role editing
 check "principal sees everything (payroll)" "$(code $B/payroll -H "$(H $P)")" 200
 check "principal lists roles" "$(curl -s $B/roles -H "$(H $P)" | j 'x.roles.length>=8&&x.areas.length===15')" true

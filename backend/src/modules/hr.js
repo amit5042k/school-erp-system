@@ -991,6 +991,59 @@ registerReport({
 });
 
 /* ---------- Routes ---------- */
+/* ---------- My Attendance (every staff member, own record only) ---------- */
+// One month of the signed-in staff member's attendance: status, first in / last out, hours, every punch, and
+// approved leave. Always their own linked staff record, whatever their role, so it's self-service for everyone.
+function myAttendance(req, res) {
+  const teacherId = req.user.linked_id;
+  if ((req.user.base_role || req.user.role) !== 'teacher' || !teacherId) {
+    return err400(res, 'Only staff logins linked to a staff record have their own attendance');
+  }
+  const month = validMonth(req.query.month) ? req.query.month : today().slice(0, 7);
+  const from = `${month}-01`, last = `${month}-${String(monthDays(month)).padStart(2, '0')}`;
+  const to = last < today() ? last : today();
+  const r = rules();
+  const me = db.prepare('SELECT id, full_name, employee_no, department, designation FROM teachers WHERE id = ?').get(teacherId);
+  const recs = new Map(db.prepare(`SELECT date, status, in_time, out_time, remarks, source FROM hr_staff_attendance
+    WHERE teacher_id = ? AND date BETWEEN ? AND ?`).all(teacherId, from, last).map(x => [x.date, x]));
+  // Punches from live devices and from CSV imports, each time once.
+  const punches = new Map();
+  const addPunch = (date, time, via) => {
+    const list = punches.get(date) || [];
+    const t = String(time).slice(0, 5);
+    if (!list.some(p => p.time === t)) list.push({ time: t, via });
+    punches.set(date, list);
+  };
+  for (const p of db.prepare(`SELECT b.punch_date, b.punch_time, d.name FROM bio_punches b LEFT JOIN bio_devices d ON d.id = b.device_id
+    WHERE b.teacher_id = ? AND b.punch_date BETWEEN ? AND ? ORDER BY b.punch_time`).all(teacherId, from, last)) addPunch(p.punch_date, p.punch_time, p.name || 'Device');
+  for (const p of db.prepare(`SELECT punch_date, punch_time FROM hr_punches WHERE teacher_id = ? AND punch_date BETWEEN ? AND ?
+    ORDER BY punch_time`).all(teacherId, from, last)) addPunch(p.punch_date, p.punch_time, 'Imported');
+  const leaves = db.prepare(`SELECT leave_type, COALESCE(approved_from, from_date) AS f, COALESCE(approved_to, to_date) AS t FROM staff_leaves
+    WHERE teacher_id = ? AND status = 'approved' AND COALESCE(approved_from, from_date) <= ? AND COALESCE(approved_to, to_date) >= ?`).all(teacherId, last, from);
+  const days = [];
+  const summary = { present: 0, late: 0, half_day: 0, absent: 0, leave: 0, not_marked: 0, hours: 0 };
+  if (from <= to) eachDate(from, to, (date) => {
+    const weekday = new Date(`${date}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'long', timeZone: 'UTC' });
+    const rec = recs.get(date) || null;
+    const list = (punches.get(date) || []).sort((a, b) => a.time.localeCompare(b.time));
+    const inTime = rec?.in_time || list[0]?.time || null;
+    const outTime = rec?.out_time || (list.length > 1 ? list[list.length - 1].time : null);
+    const hours = inTime && outTime && mins(outTime) > mins(inTime) ? Math.round((mins(outTime) - mins(inTime)) / 6) / 10 : null;
+    const leave = leaves.find(l => l.f <= date && l.t >= date);
+    const off = weekday === r.weekly_off;
+    const status = rec?.status || (leave ? 'leave' : null);
+    const lateBy = inTime ? Math.max(0, mins(inTime) - mins(r.office_start)) : 0;
+    if (status) summary[status] += 1; else if (!off) summary.not_marked += 1;
+    if (hours) summary.hours += hours;
+    days.push({ date, weekday, weekly_off: off, status, in_time: inTime, out_time: outTime, hours,
+      late_minutes: lateBy > r.late_after_minutes ? lateBy : 0, source: rec?.source || null, remarks: rec?.remarks || null,
+      leave_type: leave?.leave_type || null, punches: list });
+  });
+  summary.hours = Math.round(summary.hours * 10) / 10;
+  res.json({ month, staff: me, rules: { office_start: r.office_start, office_end: r.office_end, late_after_minutes: r.late_after_minutes,
+    half_day_after: r.half_day_after, weekly_off: r.weekly_off }, summary, days: days.reverse() });
+}
+
 function register(router) {
   const A = role(...ROLES.ADMIN), S = role(...ROLES.STAFF);
   router.get('/hr/employees/:id', auth, S, employees.get);
@@ -998,6 +1051,7 @@ function register(router) {
   router.put('/hr/employees', auth, A, safe(employees.quickUpdate));
   router.put('/hr/employees/:id', auth, A, safe(employees.update));
 
+  router.get('/hr/my-attendance', auth, role(...ROLES.STAFF), safe(myAttendance));
   router.get('/hr/staff-attendance', auth, S, safe(staffAttendance.list));
   router.post('/hr/staff-attendance', auth, A, safe(staffAttendance.save));
   router.post('/hr/biometric/import', auth, A, safe(importPunches));

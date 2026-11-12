@@ -24,7 +24,7 @@ const PAGE_AREAS: [string, string][] = [
 
 // Pages every staff member can open for their own records or school notices, whatever their role.
 const SELF_SERVICE = ['/leaves', '/payroll', '/announcements', '/calendar', '/timetable', '/surveys', '/suggestions',
-  '/documents', '/awards', '/inventory/requests', '/home', '/notifications', '/dashboard', '/change-password', '/birthdays'];
+  '/documents', '/awards', '/inventory/requests', '/my-attendance', '/home', '/notifications', '/dashboard', '/change-password', '/birthdays'];
 
 export function areaForPage(pathname: string): string | null {
   for (const [prefix, area] of PAGE_AREAS) if (pathname === prefix || pathname.startsWith(prefix + '/')) return area;

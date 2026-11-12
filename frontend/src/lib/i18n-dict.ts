@@ -251,4 +251,23 @@ export const DICT: Record<string, Entry> = {
   '-- Select --': { hi: '-- चुनें --', pa: '-- ਚੁਣੋ --' },
   'All Students': { hi: 'सभी विद्यार्थी', pa: 'ਸਾਰੇ ਵਿਦਿਆਰਥੀ' },
   'All Staff': { hi: 'सभी कर्मचारी', pa: 'ਸਾਰਾ ਸਟਾਫ਼' },
+
+  // My Attendance
+  'My Attendance': { hi: 'मेरी उपस्थिति', pa: 'ਮੇਰੀ ਹਾਜ਼ਰੀ' },
+  'In': { hi: 'आगमन', pa: 'ਆਮਦ' },
+  'Out': { hi: 'प्रस्थान', pa: 'ਰਵਾਨਗੀ' },
+  'Hours': { hi: 'घंटे', pa: 'ਘੰਟੇ' },
+  'Punches': { hi: 'पंच', pa: 'ਪੰਚ' },
+  'Hours worked': { hi: 'काम के घंटे', pa: 'ਕੰਮ ਦੇ ਘੰਟੇ' },
+  'Half Day': { hi: 'आधा दिन', pa: 'ਅੱਧਾ ਦਿਨ' },
+  'Weekly off': { hi: 'साप्ताहिक अवकाश', pa: 'ਹਫ਼ਤਾਵਾਰੀ ਛੁੱਟੀ' },
+  'Not marked': { hi: 'दर्ज नहीं', pa: 'ਦਰਜ ਨਹੀਂ' },
+  'min late': { hi: 'मिनट देर', pa: 'ਮਿੰਟ ਲੇਟ' },
+  'Marked by office': { hi: 'कार्यालय द्वारा दर्ज', pa: 'ਦਫ਼ਤਰ ਵੱਲੋਂ ਦਰਜ' },
+  'School timing': { hi: 'विद्यालय समय', pa: 'ਸਕੂਲ ਦਾ ਸਮਾਂ' },
+  'late after': { hi: 'देर माना जाएगा', pa: 'ਲੇਟ ਮੰਨਿਆ ਜਾਵੇਗਾ' },
+  'min': { hi: 'मिनट', pa: 'ਮਿੰਟ' },
+  'half day if in after': { hi: 'इसके बाद आने पर आधा दिन', pa: 'ਇਸ ਤੋਂ ਬਾਅਦ ਆਉਣ ਤੇ ਅੱਧਾ ਦਿਨ' },
+  'weekly off': { hi: 'साप्ताहिक अवकाश', pa: 'ਹਫ਼ਤਾਵਾਰੀ ਛੁੱਟੀ' },
+  'In and out come from the biometric device (first and last punch of the day) or from the office. If something looks wrong, tell the office so they can correct it.': { hi: 'आगमन और प्रस्थान बायोमेट्रिक मशीन (दिन का पहला और आखिरी पंच) या कार्यालय से आते हैं। कुछ गलत लगे तो कार्यालय को बताएँ ताकि वे इसे ठीक कर सकें।', pa: 'ਆਮਦ ਅਤੇ ਰਵਾਨਗੀ ਬਾਇਓਮੈਟ੍ਰਿਕ ਮਸ਼ੀਨ (ਦਿਨ ਦਾ ਪਹਿਲਾ ਅਤੇ ਆਖ਼ਰੀ ਪੰਚ) ਜਾਂ ਦਫ਼ਤਰ ਤੋਂ ਆਉਂਦੇ ਹਨ। ਕੁਝ ਗਲਤ ਲੱਗੇ ਤਾਂ ਦਫ਼ਤਰ ਨੂੰ ਦੱਸੋ ਤਾਂ ਜੋ ਉਹ ਇਸ ਨੂੰ ਠੀਕ ਕਰ ਸਕਣ।' },
 };
