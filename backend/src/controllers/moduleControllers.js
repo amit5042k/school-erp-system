@@ -89,7 +89,7 @@ exports.upsertMarks = (req, res) => {
 };
 
 /* ---------- Library ---------- */
-exports.books = makeCrud({
+const booksCrud = makeCrud({
   table: 'books',
   fields: ['book_no','title','author','publisher','category','qty_total','qty_available','rack','price'],
   orderBy: 'title',
@@ -102,6 +102,20 @@ exports.books = makeCrud({
     return null;
   },
 });
+// Available copies always equal total minus copies on loan, so changing the total can't leave them out of step
+// (a stale "available" from the edit form would otherwise let returns push it above the total).
+exports.books = {
+  ...booksCrud,
+  update(req, res) {
+    if ('qty_total' in (req.body || {})) {
+      const onLoan = db.prepare("SELECT COUNT(*) AS c FROM book_issues WHERE book_id = ? AND status = 'issued'").get(req.params.id).c;
+      const total = num(req.body.qty_total);
+      if (Number.isInteger(total) && total < onLoan) return res.status(400).json({ error: `${onLoan} copies are on loan; the total can't be less than that` });
+      if (Number.isInteger(total)) req.body.qty_available = total - onLoan;
+    }
+    return booksCrud.update(req, res);
+  },
+};
 exports.listBookIssues = (req, res) => {
   const own = !isStaff(req.user);
   const rows = db.prepare(`
