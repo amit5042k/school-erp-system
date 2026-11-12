@@ -124,6 +124,8 @@ const h = {
   saveStructure(req, res) {
     const t = db.prepare('SELECT id FROM teachers WHERE id = ?').get(req.params.teacherId);
     if (!t) throw httpError(404, 'Staff member not found');
+    // An accountant with full payroll access sets everyone's salary but their own (a Super Admin does that).
+    if ((req.user.base_role || req.user.role) !== 'admin' && t.id === req.user.linked_id) throw httpError(403, 'You cannot change your own salary structure');
     const v = {};
     for (const k of ['basic', 'da', 'hra', 'conveyance', 'other_allowance', 'tds', 'other_deduction']) {
       v[k] = req.body[k] === '' || req.body[k] == null ? 0 : num(req.body[k]);
@@ -191,7 +193,8 @@ const h = {
     res.json({ ...s, gross: round2(s.basic + s.allowances), school });
   },
   mySlips(req, res) {
-    if (req.user.role !== 'teacher') throw httpError(403, 'Only staff logins have payslips');
+    // base_role: a principal or accountant acts as admin on /pay, but their own slips are still theirs.
+    if ((req.user.base_role || req.user.role) !== 'teacher') throw httpError(403, 'Only staff logins have payslips');
     res.json(db.prepare(`${SLIP_SQL} WHERE p.teacher_id = ? ORDER BY p.month DESC`).all(req.user.linked_id ?? -1));
   },
 

@@ -211,7 +211,9 @@ function deviceFor(req) {
       .run(nowIso(), ip, clean(req.query.pushver, 20) || null, device.id);
     return { sn, device };
   }
-  if (!device) {
+  // /iclock is public, so cap the waiting list: a flood of made-up serial numbers can't grow it without limit.
+  const known = !device && db.prepare('SELECT 1 FROM bio_unregistered WHERE sn = ?').get(sn);
+  if (!device && (known || db.prepare('SELECT COUNT(*) AS c FROM bio_unregistered').get().c < 100)) {
     db.prepare(`INSERT INTO bio_unregistered (sn, last_ip, push_version) VALUES (?, ?, ?)
       ON CONFLICT(sn) DO UPDATE SET last_seen = CURRENT_TIMESTAMP, last_ip = excluded.last_ip, hits = hits + 1,
         push_version = COALESCE(excluded.push_version, push_version)`).run(sn, ip, clean(req.query.pushver, 20) || null);

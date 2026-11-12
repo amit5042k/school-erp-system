@@ -400,6 +400,10 @@ exports.leaveDecision = (req, res) => {
   if (!['approve','reject','cancel'].includes(action)) return res.status(400).json({ error: 'action must be approve|reject|cancel' });
   const leave = db.prepare('SELECT * FROM staff_leaves WHERE id = ?').get(req.params.id);
   if (!leave) return res.status(404).json({ error: 'Not found' });
+  // Staff with full HR access decide others' leave, never their own; a Super Admin decides theirs.
+  if ((req.user.base_role || req.user.role) !== 'admin' && leave.teacher_id === req.user.linked_id) {
+    return res.status(403).json({ error: 'You cannot decide your own leave; it goes to the principal or Super Admin' });
+  }
   const map = { approve: 'approved', reject: 'rejected', cancel: 'cancelled' };
   if (leave.status === 'cancelled' || leave.status === 'rejected') return res.status(400).json({ error: `Leave is already ${leave.status}` });
   if (leave.status === 'approved' && action !== 'cancel') return res.status(400).json({ error: 'Leave is already approved; it can only be cancelled' });
@@ -469,7 +473,20 @@ function withNetPay(handler) {
     return handler(req, res);
   };
 }
-exports.payroll = { ...payrollCrud, create: withNetPay(payrollCrud.create), update: withNetPay(payrollCrud.update) };
+// Nobody but a Super Admin edits their own salary slip, even with full payroll access.
+function notOwnSlip(handler) {
+  return (req, res) => {
+    if ((req.user.base_role || req.user.role) !== 'admin' && req.user.linked_id != null) {
+      const row = req.params.id ? db.prepare('SELECT teacher_id FROM payroll WHERE id = ?').get(req.params.id) : null;
+      if ([row?.teacher_id, req.body?.teacher_id].some(t => t != null && Number(t) === req.user.linked_id)) {
+        return res.status(403).json({ error: 'You cannot change your own salary slip' });
+      }
+    }
+    return handler(req, res);
+  };
+}
+exports.payroll = { ...payrollCrud, create: notOwnSlip(withNetPay(payrollCrud.create)), update: notOwnSlip(withNetPay(payrollCrud.update)),
+  remove: notOwnSlip(payrollCrud.remove) };
 
 /* ---------- Homework ---------- */
 exports.homework = makeCrud({
@@ -552,6 +569,15 @@ const staffRoles = require('../utils/roles');
 // Only a Super Admin may create, reset or disable Super Admin accounts, so other roles can't promote themselves.
 const touchesSuperAdmin = (req, targetId) =>
   req.user.base_role !== 'admin' && db.prepare("SELECT role FROM users WHERE id = ?").get(targetId)?.role === 'admin';
+// Below Super Admin, user managers can't create, assign, reset or disable a staff login whose role has more access
+// than their own: otherwise an IT head could become a principal by making (or taking over) a principal login.
+const { exceedsPerms } = require('../utils/permissions');
+const roleBeyondMine = (req, roleKey) =>
+  (req.user.base_role !== 'admin' && roleKey ? exceedsPerms(staffRoles.get(roleKey)?.perms, req.user.perms) : null);
+const userBeyondMine = (req, targetId) => {
+  const u = db.prepare('SELECT role, role_key FROM users WHERE id = ?').get(targetId);
+  return u?.role === 'teacher' ? roleBeyondMine(req, u.role_key || 'teacher') : null;
+};
 
 exports.users = {
   list(req, res) {
@@ -565,6 +591,8 @@ exports.users = {
     if (!USER_ROLES.includes(role)) return res.status(400).json({ error: `role must be one of ${USER_ROLES.join(', ')}` });
     if (role === 'admin' && req.user.base_role !== 'admin') return res.status(403).json({ error: 'Only a Super Admin can create Super Admin accounts' });
     if (roleKey && !staffRoles.get(roleKey)) return res.status(400).json({ error: `Unknown staff role ${roleKey}` });
+    const over = roleBeyondMine(req, roleKey);
+    if (over) return res.status(403).json({ error: `You can't create a login with more access than yours (${over}); ask a Super Admin` });
     if (String(password).length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
     const linkProblem = checkLink(role, linked_id);
     if (linkProblem) return res.status(400).json({ error: linkProblem });
@@ -583,12 +611,15 @@ exports.users = {
     if (u.id === req.user.id && req.user.base_role !== 'admin') return res.status(403).json({ error: "You can't change your own role; ask a Super Admin" });
     const key = req.body.role_key;
     if (!staffRoles.get(key)) return res.status(400).json({ error: 'Unknown staff role' });
+    const over = userBeyondMine(req, u.id) || roleBeyondMine(req, key);
+    if (over) return res.status(403).json({ error: `You can't manage logins with more access than yours (${over}); ask a Super Admin` });
     db.prepare('UPDATE users SET role_key = ? WHERE id = ?').run(key, u.id);
     res.json({ ok: true });
   },
   setActive(req, res) {
     if (Number(req.params.id) === req.user.id && !req.body.active) return res.status(400).json({ error: 'You cannot deactivate your own account' });
     if (touchesSuperAdmin(req, req.params.id)) return res.status(403).json({ error: 'Only a Super Admin can change a Super Admin account' });
+    if (userBeyondMine(req, req.params.id)) return res.status(403).json({ error: 'This login has more access than yours; ask a Super Admin' });
     const info = db.prepare('UPDATE users SET active = ? WHERE id = ?').run(req.body.active ? 1 : 0, req.params.id);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
@@ -597,6 +628,7 @@ exports.users = {
     const { password } = req.body;
     if (!password || String(password).length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
     if (touchesSuperAdmin(req, req.params.id)) return res.status(403).json({ error: 'Only a Super Admin can change a Super Admin account' });
+    if (userBeyondMine(req, req.params.id)) return res.status(403).json({ error: 'This login has more access than yours; ask a Super Admin' });
     const info = db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(bcrypt.hashSync(password, 10), req.params.id);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });

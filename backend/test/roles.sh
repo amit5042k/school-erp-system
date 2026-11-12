@@ -73,6 +73,15 @@ check "staff blocked from /API/student-leave" "$(code ${B%/api}/API/student-leav
 check "accountant opens accounts" "$(code $B/accounts/summary -H "$(H $AC)")" 200
 check "clerk blocked from accounts" "$(code $B/accounts/summary -H "$(H $CL)")" 403
 check "teacher blocked from accounts" "$(code $B/accounts/vouchers -H "$(H $CO)")" 403
+# User managers below Super Admin can't hand out or take over more access than they have (IT head has no Finance).
+PRID=$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='pr$SFX').id")
+check "IT head can't create a principal login" "$(code -X POST $B/users -H "$(H $IT)" -H "$C" -d "{\"username\":\"xp$SFX\",\"password\":\"start123\",\"role\":\"teacher\",\"role_key\":\"principal\",\"full_name\":\"x\",\"linked_id\":1}")" 403
+check "IT head can't reset the principal's password" "$(code -X POST $B/users/$PRID/reset-password -H "$(H $IT)" -H "$C" -d '{"password":"taken123"}')" 403
+check "IT head can't give a role Finance access" "$(code -X PUT $B/roles/teacher -H "$(H $IT)" -H "$C" -d '{"perms":{"finance":"full"}}')" 403
+check "IT head can still create a teacher login" "$(code -X POST $B/users -H "$(H $IT)" -H "$C" -d "{\"username\":\"xt$SFX\",\"password\":\"start123\",\"role\":\"teacher\",\"role_key\":\"teacher\",\"full_name\":\"x\",\"linked_id\":1}")" 201
+# Nobody below Super Admin decides their own leave or sets their own salary.
+check "accountant can't change own salary structure" "$(code -X PUT $B/pay/structure/4 -H "$(H $AC)" -H "$C" -d '{"basic":99999}')" 403
+check "principal sees own payslips" "$(code $B/pay/my-slips -H "$(H $P)")" 200
 # Principal and role editing
 check "principal sees everything (payroll)" "$(code $B/payroll -H "$(H $P)")" 200
 check "principal lists roles" "$(curl -s $B/roles -H "$(H $P)" | j 'x.roles.length>=8&&x.areas.length===15')" true

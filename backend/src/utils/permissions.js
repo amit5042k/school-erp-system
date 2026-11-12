@@ -148,6 +148,16 @@ function roleInArea(perms, area) {
   return level === 'none' ? null : roleFor(level);
 }
 
+/**
+ * Label of the first area where `perms` grants more than `mine`, or null when it grants nothing more.
+ * Staff who manage users and roles may only hand out (or take over) access they have themselves.
+ */
+function exceedsPerms(perms, mine) {
+  const rank = (l) => LEVELS.indexOf(l || 'none');
+  const area = AREAS.find(a => rank(perms?.[a.key]) > rank(mine?.[a.key]));
+  return area ? area.label : null;
+}
+
 function normalizePerms(perms) {
   const out = {};
   for (const k of AREA_KEYS) out[k] = LEVELS.includes(perms?.[k]) ? perms[k] : 'none';
@@ -156,5 +166,5 @@ function normalizePerms(perms) {
 
 module.exports = {
   AREAS, AREA_KEYS, LEVELS, DEFAULT_ROLES, REPORT_GROUP_AREAS,
-  areaForPath, isSelfService, effectiveRole, roleInArea, normalizePerms, normPath,
+  areaForPath, isSelfService, effectiveRole, roleInArea, normalizePerms, normPath, exceedsPerms,
 };

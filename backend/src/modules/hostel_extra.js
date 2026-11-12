@@ -318,12 +318,13 @@ const outpass = {
     const clash = db.prepare(`SELECT out_at, expected_return_at, status FROM hx_outpasses WHERE student_id = ?
       AND status IN ('requested','approved','out') AND out_at < ? AND expected_return_at > ?`).get(studentId, returnAt, outAt);
     if (clash) throw err(409, `This student already has an out-pass (${clash.status}) from ${fmtWhen(clash.out_at)} to ${fmtWhen(clash.expected_return_at)}`);
-    // Staff issue passes already approved; families' requests wait for the warden.
-    const status = staffUser ? 'approved' : 'requested';
+    // The warden (full Hostel access) issues passes already approved; other staff's and families' requests wait for the warden.
+    const warden = req.user.role === 'admin';
+    const status = warden ? 'approved' : 'requested';
     const info = db.prepare(`INSERT INTO hx_outpasses (student_id, hostel_id, reason, destination, escort, out_at, expected_return_at, status,
       requested_by, decided_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(studentId, home.hostel_id, reason, text(b.destination),
-      text(b.escort, 120), outAt, returnAt, status, req.user.id, staffUser ? req.user.id : null);
-    if (staffUser) notify(familyUsers(studentId), 'Out-pass issued', `Out-pass approved: leaving ${fmtWhen(b.out_at)}, back by ${fmtWhen(b.expected_return_at)}.`, '/hostel/my');
+      text(b.escort, 120), outAt, returnAt, status, req.user.id, warden ? req.user.id : null);
+    if (warden) notify(familyUsers(studentId), 'Out-pass issued', `Out-pass approved: leaving ${fmtWhen(b.out_at)}, back by ${fmtWhen(b.expected_return_at)}.`, '/hostel/my');
     res.status(201).json({ id: info.lastInsertRowid, status });
   },
   // Moves a pass along: approve / reject / out / returned / cancel.
@@ -334,14 +335,16 @@ const outpass = {
     const remarks = text(req.body.remarks, 300);
     const staffUser = isStaff(req.user);
     const next = {
-      approve: { from: ['requested'], to: 'approved', staff: true },
-      reject: { from: ['requested'], to: 'rejected', staff: true },
+      approve: { from: ['requested'], to: 'approved', staff: true, warden: true },
+      reject: { from: ['requested'], to: 'rejected', staff: true, warden: true },
       out: { from: ['approved'], to: 'out', staff: true },
       returned: { from: ['out'], to: 'returned', staff: true },
       cancel: { from: ['requested', 'approved'], to: 'cancelled', staff: false },
     }[action];
     if (!next) throw err(400, 'action must be approve, reject, out, returned or cancel');
     if (next.staff && !staffUser) throw err(403, 'Only hostel staff can do this');
+    // Letting a boarder leave is the warden's decision; teacher-level staff only mark them out and back.
+    if (next.warden && req.user.role !== 'admin') throw err(403, 'Only the hostel warden (full Hostel access) can approve or reject out-passes');
     if (!staffUser && o.student_id !== req.user.linked_id) throw err(404, 'Out-pass not found');
     if (!next.from.includes(o.status)) throw err(400, `This out-pass is ${o.status}`);
     const sets = ['status = ?', 'remarks = COALESCE(?, remarks)'];

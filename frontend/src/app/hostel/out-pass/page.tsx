@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api } from '@/lib/api';
+import { api, getUser } from '@/lib/api';
 import { Crumb, Flash, OUTPASS_UI, useFlash, when } from '../_ui';
 
 export type OutPass = { id: number; student_id: number; student_name: string; admission_no: string; class: string | null; hostel_name: string | null;
@@ -15,6 +15,8 @@ const FILTERS = [['', 'All'], ['requested', 'Requests'], ['approved', 'Approved'
 const blank = { student_id: '', reason: '', destination: '', escort: '', out_at: '', expected_return_at: '' };
 
 export default function OutPassPage() {
+  // Approving a boarder's leave needs full Hostel access (the server enforces it too).
+  const warden = getUser<{ role: string }>()?.role === 'admin';
   const [status, setStatus] = useState<string>('');
   const [rows, setRows] = useState<OutPass[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -64,7 +66,7 @@ export default function OutPassPage() {
           <div><label className="label">Reason *</label><input className="input" value={f.reason} onChange={e => setF({ ...f, reason: e.target.value })} /></div>
           <div><label className="label">Going to</label><input className="input" value={f.destination} onChange={e => setF({ ...f, destination: e.target.value })} /></div>
           <div><label className="label">Picked up by</label><input className="input" value={f.escort} onChange={e => setF({ ...f, escort: e.target.value })} /></div>
-          <div className="md:col-span-3 text-right"><button className="btn btn-primary">Issue (approved)</button></div>
+          <div className="md:col-span-3 text-right"><button className="btn btn-primary">{warden ? 'Issue (approved)' : 'Request out-pass'}</button></div>
         </form>
       )}
       <div className="flex flex-wrap gap-2 mb-3">
@@ -86,7 +88,7 @@ export default function OutPassPage() {
                   <td><span className={`badge ${st.cls}`}>{st.label}</span>{o.overdue ? <span className="badge badge-red ml-1">Overdue</span> : null}
                     {o.remarks && <div className="text-xs text-gray-500 mt-1">{o.remarks}</div>}</td>
                   <td className="whitespace-nowrap text-xs space-x-2">
-                    {o.status === 'requested' && <>
+                    {o.status === 'requested' && warden && <>
                       <button className="text-green-700 hover:underline" onClick={() => act(o, 'approve', 'Approved.')}>Approve</button>
                       <button className="text-red-600 hover:underline" onClick={() => act(o, 'reject', 'Not approved.')}>Reject</button></>}
                     {o.status === 'approved' && <button className="text-brand-600 hover:underline" onClick={() => act(o, 'out', 'Marked as left.')}>Mark left</button>}
