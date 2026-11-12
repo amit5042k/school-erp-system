@@ -5,6 +5,8 @@ A full-featured School ERP web application built with a modern
 
 ---
 
+
+**Setup guide & user manual (PDF):** [docs/School-ERP-Setup-Guide-and-User-Manual.pdf](docs/School-ERP-Setup-Guide-and-User-Manual.pdf): installing on a VPS, every setting, SMS/WhatsApp, Razorpay, eSSL, the Android app, backups, the multi-school console, and how to use every module, role by role.
 ## Modules
 
 **Roles:** Admin, Teacher, Student, Parent.
