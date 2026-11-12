@@ -29,7 +29,8 @@ exports.byDate = (req, res) => {
     SELECT s.id AS student_id, s.full_name, s.roll_no, s.class_id, a.status, a.remarks
     FROM students s
     LEFT JOIN attendance a ON a.student_id = s.id AND a.date = ?
-    ${classId ? 'WHERE s.class_id = ?' : ''}
+    -- Students who have left drop off the roster, but a day they were already marked still shows.
+    WHERE (COALESCE(s.status, 'active') = 'active' OR a.id IS NOT NULL) ${classId ? 'AND s.class_id = ?' : ''}
     ORDER BY s.roll_no, s.full_name
   `).all(...(classId ? [date, classId] : [date]));
   res.json(rows);
