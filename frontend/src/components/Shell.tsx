@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, clearSession, getStoredUser, getToken, setUser } from '@/lib/api';
 import { areaForPage, isSelf, levelFor, type Perms } from '@/lib/permissions';
 import LicenceBanner, { useLicence } from '@/components/LicenceBanner';
-import NativeBridge, { unregisterPush } from '@/components/NativeBridge';
+import { disableNotifications } from '@/components/Pwa';
 import ChildSwitcher from '@/components/ChildSwitcher';
 import { LANGS, getLang, setLang, t, type Lang } from '@/lib/i18n';
 
@@ -69,7 +69,7 @@ const NAV: NavItem[] = [
   { label: 'Payroll Management',    href: '/payroll',               icon: '💰', roles: ['admin', 'teacher'] },
   { label: 'Inventory',             href: '/inventory',             icon: '📦', roles: ADMIN },
   { label: 'Item Requests',         href: '/inventory/requests',    icon: '📦', roles: ['teacher'] },
-  { label: 'My Attendance',         href: '/my-attendance',         icon: '🕘', roles: ['teacher'] },
+  { label: 'My In/Out Timing',      href: '/my-timing',             icon: '🕘', roles: ['teacher'] },
   { label: 'Users & Roles',         href: '/users',                 icon: '🔐', roles: ADMIN },
   { label: 'Roles & Permissions',   href: '/roles',                 icon: '🛡', roles: ADMIN },
   { label: 'Bulk Import',           href: '/imports',               icon: '⇪', roles: ADMIN },
@@ -150,13 +150,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('click', onDoc);
   }, []);
 
-  async function logout() { await unregisterPush().catch(() => {}); clearSession(); router.replace('/login'); }
+  async function logout() { await disableNotifications().catch(() => {}); clearSession(); router.replace('/login'); }
 
   if (!user) return <div className="min-h-screen grid place-items-center text-gray-500">{t('Loading…')}</div>;
 
   return (
     <div id="wrapper" className={showNav ? 'show-nav' : ''}>
-      <NativeBridge />
       <aside id="nav">
         <div className="bg-brand-700 text-white px-4 py-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white text-brand-700 grid place-items-center font-bold">SE</div>

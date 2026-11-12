@@ -164,11 +164,13 @@ Then approve the device in **Human Resource › Biometric Devices** and map staf
 (defaults to Employee No). Most ADMS firmware can't use HTTPS, so let nginx accept plain HTTP for `/iclock/` only
 (sample config on the Biometric Devices page).
 
-## Android app
+## Installable app (PWA) and notifications
 
-`mobile/` is a Capacitor app that opens the ERP website with push notifications. Set `ERP_URL` and `API_URL`
-(repo variables) and run the **Android app** GitHub workflow to get an APK; see `mobile/README.md` for Firebase
-(`google-services.json`, `FCM_SERVICE_ACCOUNT_FILE`), signing and Play Store steps.
+There is no separate Android or iOS app: the website installs as an app. On Android and desktop Chrome/Edge, Home shows
+**Install app**; on iPhone (iOS 16.4+) use Safari › Share › **Add to Home Screen**. The installed app opens full screen on
+Home, shows an offline screen without internet (`frontend/public/sw.js`), and gets Web Push notifications once the user
+taps **Turn on notifications**. Push works out of the box: a VAPID key pair is generated on first start and kept in the
+database (set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` to use your own). Installing and push need https.
 
 ## How the code is organised
 

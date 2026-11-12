@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, fmtDateTime } from '@/lib/api';
 import { t } from '@/lib/i18n';
+import { AppSetup } from '@/components/Pwa';
 
 type Item = { id: number; title: string; body: string; link: string | null; kind: string | null; read_at: string | null; created_at: string };
 
@@ -32,6 +33,7 @@ export default function NotificationsPage() {
           <h2 className="text-xl font-bold text-brand-700">{t('Notifications')}</h2>
           {!!data?.unread && <button className="text-sm text-brand-600 hover:underline" onClick={readAll}>{t('Mark all as read')}</button>}
         </div>
+        <AppSetup />
         {err && <div className="text-red-700 text-sm mb-3">{err}</div>}
         <div className="card p-0 overflow-hidden">
           {data?.items.map(n => (

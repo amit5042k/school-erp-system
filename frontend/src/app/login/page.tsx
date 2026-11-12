@@ -28,8 +28,9 @@ export default function LoginPage() {
       });
       setToken(res.token);
       setUser(res.user);
-      // The Android app opens on the phone-first Home screen; the website keeps the full dashboard.
-      router.push(typeof navigator !== 'undefined' && navigator.userAgent.includes('SchoolERP-App') ? '/home' : '/dashboard');
+      // Phones and the installed app open on the phone-first Home screen; computers get the full dashboard.
+      const app = window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(max-width: 640px)').matches;
+      router.push(app ? '/home' : '/dashboard');
     } catch (err: any) {
       setError(err.message || t('Login failed'));
     } finally {

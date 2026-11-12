@@ -252,22 +252,21 @@ export const DICT: Record<string, Entry> = {
   'All Students': { hi: 'सभी विद्यार्थी', pa: 'ਸਾਰੇ ਵਿਦਿਆਰਥੀ' },
   'All Staff': { hi: 'सभी कर्मचारी', pa: 'ਸਾਰਾ ਸਟਾਫ਼' },
 
-  // My Attendance
-  'My Attendance': { hi: 'मेरी उपस्थिति', pa: 'ਮੇਰੀ ਹਾਜ਼ਰੀ' },
+  // My In/Out Timing
+  'My In/Out Timing': { hi: 'मेरा आने-जाने का समय', pa: 'ਮੇਰਾ ਆਉਣ-ਜਾਣ ਦਾ ਸਮਾਂ' },
   'In': { hi: 'आगमन', pa: 'ਆਮਦ' },
   'Out': { hi: 'प्रस्थान', pa: 'ਰਵਾਨਗੀ' },
-  'Hours': { hi: 'घंटे', pa: 'ਘੰਟੇ' },
   'Punches': { hi: 'पंच', pa: 'ਪੰਚ' },
-  'Hours worked': { hi: 'काम के घंटे', pa: 'ਕੰਮ ਦੇ ਘੰਟੇ' },
-  'Half Day': { hi: 'आधा दिन', pa: 'ਅੱਧਾ ਦਿਨ' },
-  'Weekly off': { hi: 'साप्ताहिक अवकाश', pa: 'ਹਫ਼ਤਾਵਾਰੀ ਛੁੱਟੀ' },
-  'Not marked': { hi: 'दर्ज नहीं', pa: 'ਦਰਜ ਨਹੀਂ' },
-  'min late': { hi: 'मिनट देर', pa: 'ਮਿੰਟ ਲੇਟ' },
-  'Marked by office': { hi: 'कार्यालय द्वारा दर्ज', pa: 'ਦਫ਼ਤਰ ਵੱਲੋਂ ਦਰਜ' },
-  'School timing': { hi: 'विद्यालय समय', pa: 'ਸਕੂਲ ਦਾ ਸਮਾਂ' },
-  'late after': { hi: 'देर माना जाएगा', pa: 'ਲੇਟ ਮੰਨਿਆ ਜਾਵੇਗਾ' },
-  'min': { hi: 'मिनट', pa: 'ਮਿੰਟ' },
-  'half day if in after': { hi: 'इसके बाद आने पर आधा दिन', pa: 'ਇਸ ਤੋਂ ਬਾਅਦ ਆਉਣ ਤੇ ਅੱਧਾ ਦਿਨ' },
-  'weekly off': { hi: 'साप्ताहिक अवकाश', pa: 'ਹਫ਼ਤਾਵਾਰੀ ਛੁੱਟੀ' },
-  'In and out come from the biometric device (first and last punch of the day) or from the office. If something looks wrong, tell the office so they can correct it.': { hi: 'आगमन और प्रस्थान बायोमेट्रिक मशीन (दिन का पहला और आखिरी पंच) या कार्यालय से आते हैं। कुछ गलत लगे तो कार्यालय को बताएँ ताकि वे इसे ठीक कर सकें।', pa: 'ਆਮਦ ਅਤੇ ਰਵਾਨਗੀ ਬਾਇਓਮੈਟ੍ਰਿਕ ਮਸ਼ੀਨ (ਦਿਨ ਦਾ ਪਹਿਲਾ ਅਤੇ ਆਖ਼ਰੀ ਪੰਚ) ਜਾਂ ਦਫ਼ਤਰ ਤੋਂ ਆਉਂਦੇ ਹਨ। ਕੁਝ ਗਲਤ ਲੱਗੇ ਤਾਂ ਦਫ਼ਤਰ ਨੂੰ ਦੱਸੋ ਤਾਂ ਜੋ ਉਹ ਇਸ ਨੂੰ ਠੀਕ ਕਰ ਸਕਣ।' },
+  'In is your first punch of the day and Out your last. If a time looks wrong, tell the office.': { hi: 'आगमन दिन का आपका पहला पंच है और प्रस्थान आखिरी। कोई समय गलत लगे तो कार्यालय को बताएँ।', pa: 'ਆਮਦ ਦਿਨ ਦਾ ਤੁਹਾਡਾ ਪਹਿਲਾ ਪੰਚ ਹੈ ਅਤੇ ਰਵਾਨਗੀ ਆਖ਼ਰੀ। ਕੋਈ ਸਮਾਂ ਗਲਤ ਲੱਗੇ ਤਾਂ ਦਫ਼ਤਰ ਨੂੰ ਦੱਸੋ।' },
+
+  // Installable app (PWA)
+  'Use School ERP like an app': { hi: 'School ERP को ऐप की तरह इस्तेमाल करें', pa: 'School ERP ਨੂੰ ਐਪ ਵਾਂਗ ਵਰਤੋ' },
+  'Add it to your home screen: it opens full screen, without the browser bar.': { hi: 'इसे होम स्क्रीन पर जोड़ें: यह ब्राउज़र बार के बिना पूरी स्क्रीन पर खुलता है।', pa: 'ਇਸ ਨੂੰ ਹੋਮ ਸਕਰੀਨ ਤੇ ਜੋੜੋ: ਇਹ ਬ੍ਰਾਊਜ਼ਰ ਬਾਰ ਤੋਂ ਬਿਨਾਂ ਪੂਰੀ ਸਕਰੀਨ ਤੇ ਖੁੱਲ੍ਹਦਾ ਹੈ।' },
+  'Install app': { hi: 'ऐप इंस्टॉल करें', pa: 'ਐਪ ਇੰਸਟਾਲ ਕਰੋ' },
+  'On iPhone: tap the Share button in Safari, then "Add to Home Screen". Open it from the new icon to get notifications.': { hi: 'iPhone पर: Safari में शेयर बटन दबाएँ, फिर "Add to Home Screen"। सूचनाएँ पाने के लिए नए आइकन से खोलें।', pa: 'iPhone ਤੇ: Safari ਵਿੱਚ ਸ਼ੇਅਰ ਬਟਨ ਦਬਾਓ, ਫਿਰ "Add to Home Screen"। ਸੂਚਨਾਵਾਂ ਲਈ ਨਵੇਂ ਆਈਕਨ ਤੋਂ ਖੋਲ੍ਹੋ।' },
+  'Get notified about attendance, fees, results, homework and notices.': { hi: 'उपस्थिति, शुल्क, परिणाम, गृहकार्य और सूचनाओं की जानकारी पाएँ।', pa: 'ਹਾਜ਼ਰੀ, ਫ਼ੀਸ, ਨਤੀਜੇ, ਘਰ ਦੇ ਕੰਮ ਅਤੇ ਨੋਟਿਸਾਂ ਦੀ ਜਾਣਕਾਰੀ ਪਾਓ।' },
+  'Turn on notifications': { hi: 'सूचनाएँ चालू करें', pa: 'ਸੂਚਨਾਵਾਂ ਚਾਲੂ ਕਰੋ' },
+  'Notifications are on for this device.': { hi: 'इस डिवाइस पर सूचनाएँ चालू हैं।', pa: 'ਇਸ ਡਿਵਾਈਸ ਤੇ ਸੂਚਨਾਵਾਂ ਚਾਲੂ ਹਨ।' },
+  'Notifications are blocked. Allow them for this site in your browser settings.': { hi: 'सूचनाएँ बंद हैं। ब्राउज़र सेटिंग्स में इस साइट के लिए अनुमति दें।', pa: 'ਸੂਚਨਾਵਾਂ ਬੰਦ ਹਨ। ਬ੍ਰਾਊਜ਼ਰ ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਇਸ ਸਾਈਟ ਲਈ ਇਜਾਜ਼ਤ ਦਿਓ।' },
+  'This browser cannot show notifications.': { hi: 'यह ब्राउज़र सूचनाएँ नहीं दिखा सकता।', pa: 'ਇਹ ਬ੍ਰਾਊਜ਼ਰ ਸੂਚਨਾਵਾਂ ਨਹੀਂ ਦਿਖਾ ਸਕਦਾ।' },
 };

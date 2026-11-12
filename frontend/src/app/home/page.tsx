@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, fmtDateTime, fmtMoney, getStoredUser, localDate } from '@/lib/api';
 import { t as tr } from '@/lib/i18n';
+import { AppSetup } from '@/components/Pwa';
 
 type Level = 'none' | 'standard' | 'full';
 type User = {
@@ -29,7 +30,7 @@ const T = {
   reconciliation: { label: 'Reconciliation', href: '/finance/reconciliation', icon: '🏦', area: 'finance' },
   payroll: { label: 'Payroll', href: '/payroll', icon: '💰', area: 'payroll' },
   myPayslips: { label: 'My Payslips', href: '/payroll', icon: '💰' },
-  myAttendance: { label: 'My Attendance', href: '/my-attendance', icon: '🕘' },
+  myTiming: { label: 'My In/Out Timing', href: '/my-timing', icon: '🕘' },
   notices: { label: 'Notices', href: '/announcements', icon: '📣' },
   sendMessage: { label: 'Send SMS', href: '/comms/compose?mode=many', icon: '💬', area: 'communication' },
   publish: { label: 'Publish Results', href: '/exams/publish', icon: '🏆', area: 'academics' },
@@ -71,15 +72,15 @@ const T = {
 } satisfies Record<string, Tile>;
 
 const TILES: Record<string, Tile[]> = {
-  principal: [T.approveLeaves, T.studentAttendance, T.daywise, T.pendingFees, T.notices, T.sendMessage, T.publish, T.staffAttendance, T.myAttendance],
+  principal: [T.approveLeaves, T.studentAttendance, T.daywise, T.pendingFees, T.notices, T.sendMessage, T.publish, T.staffAttendance, T.myTiming],
   admin: [T.approveLeaves, T.studentAttendance, T.daywise, T.pendingFees, T.notices, T.users, T.publish, T.backups],
-  'academic-coordinator': [T.timetable, T.marksEntry, T.publish, T.reportCards, T.substitution, T.homework, T.markAttendance, T.planner, T.myAttendance],
-  'it-head': [T.users, T.roles, T.devices, T.backups, T.activityLog, T.loginStats, T.sendLogins, T.settings, T.myAttendance],
-  'office-superintendent': [T.visitors, T.enquiries, T.admission, T.approveLeaves, T.staffAttendance, T.notices, T.postal, T.complaints, T.myAttendance],
-  clerk: [T.admission, T.manageStudents, T.visitors, T.enquiries, T.prospectus, T.calls, T.postal, T.tc, T.myAttendance],
-  accountant: [T.feeSubmission, T.pendingFees, T.daywise, T.ledger, T.cheques, T.payroll, T.reconciliation, T.stock, T.myAttendance],
-  teacher: [T.markAttendance, T.marksEntry, T.homework, T.diary, T.myTimetable, T.applyLeave, T.onlineClasses, T.myPayslips, T.myAttendance],
-  staff: [T.applyLeave, T.myPayslips, T.notices, T.calendar, T.itemRequests, T.suggestions, T.myAttendance],
+  'academic-coordinator': [T.timetable, T.marksEntry, T.publish, T.reportCards, T.substitution, T.homework, T.markAttendance, T.planner, T.myTiming],
+  'it-head': [T.users, T.roles, T.devices, T.backups, T.activityLog, T.loginStats, T.sendLogins, T.settings, T.myTiming],
+  'office-superintendent': [T.visitors, T.enquiries, T.admission, T.approveLeaves, T.staffAttendance, T.notices, T.postal, T.complaints, T.myTiming],
+  clerk: [T.admission, T.manageStudents, T.visitors, T.enquiries, T.prospectus, T.calls, T.postal, T.tc, T.myTiming],
+  accountant: [T.feeSubmission, T.pendingFees, T.daywise, T.ledger, T.cheques, T.payroll, T.reconciliation, T.stock, T.myTiming],
+  teacher: [T.markAttendance, T.marksEntry, T.homework, T.diary, T.myTimetable, T.applyLeave, T.onlineClasses, T.myPayslips, T.myTiming],
+  staff: [T.applyLeave, T.myPayslips, T.notices, T.calendar, T.itemRequests, T.suggestions, T.myTiming],
   student: [T.fees, T.marks, T.homework, T.diary, T.timetable, T.notices, T.onlineClasses, T.calendar],
   parent: [T.fees, T.marks, T.reportCard, T.homework, T.diary, T.notices, T.surveys, T.suggestions],
 };
@@ -141,6 +142,8 @@ export default function HomePage() {
             })}
           </div>
         )}
+
+        <AppSetup />
 
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-6">
           {tiles.map(t => (

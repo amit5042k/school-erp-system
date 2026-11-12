@@ -78,7 +78,7 @@ const SELF_SERVICE = [
   [/^(GET|POST|PUT|DELETE) \/leaves(\/|$)/],
   [/^GET \/leave-allowances$/],
   [/^GET \/pay\/(my-slips|slip\/\d+|form16|financial-years)$/],
-  [/^GET \/hr\/my-attendance$/],
+  [/^GET \/hr\/my-timing$/],
   [/^GET \/(announcements|events|documents|timetable|awards)(\/|$)/],
   [/^GET \/academic\/timetable\/teacher\/\d+$/],
   [/^(GET|POST) \/comm\/surveys\/(open|\d+\/vote)$/],

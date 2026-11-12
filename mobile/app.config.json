@@ -1,9 +1,0 @@
-{
-  "appId": "in.schoolerp.app",
-  "appName": "School ERP",
-  "erpUrl": "https://erp.example.in",
-  "apiUrl": "https://api.example.in",
-  "themeColor": "#133b7a",
-  "versionName": "1.0.0",
-  "versionCode": 1
-}

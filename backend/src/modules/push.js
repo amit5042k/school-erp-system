@@ -1,12 +1,10 @@
-// Push notifications for the Android app (FCM HTTP v1) plus an inbox that works without FCM.
-// Notifications are triggered from utils/events 'api:change', so other modules need no edits.
+// Web Push notifications for the installed web app (PWA) and any browser that allows them, plus an inbox that
+// always works. Notifications are triggered from utils/events 'api:change', so other modules need no edits.
 //
-// Configure in backend/.env (optional):
-//   FCM_SERVICE_ACCOUNT_FILE=/path/to/firebase-service-account.json   (or FCM_SERVICE_ACCOUNT_JSON='{...}')
-//   FCM_BASE_URL=https://fcm.googleapis.com   (override only for testing)
-// Without credentials every notification still lands in the inbox; delivery is recorded as 'not_configured'.
-const fs = require('fs');
-const jwt = require('jsonwebtoken');
+// Works without setup: a VAPID key pair is generated on first start and kept in the database. To use your own
+// (e.g. to share one across servers), set in backend/.env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and
+// VAPID_SUBJECT (mailto:office@yourschool.in or https://erp.yourschool.in).
+const webpush = require('web-push');
 const { db, ROLES, auth, role, safe, today } = require('./_kit');
 const { familyUserIds } = require('../utils/family');
 const events = require('../utils/events');
@@ -17,16 +15,19 @@ db.exec(`
   );
 `);
 db.exec(`
-  CREATE TABLE IF NOT EXISTS push_devices (
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    token TEXT UNIQUE NOT NULL,
-    platform TEXT NOT NULL DEFAULT 'android',
-    app_version TEXT,
+    endpoint TEXT UNIQUE NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    user_agent TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
-  CREATE INDEX IF NOT EXISTS ix_push_devices_user ON push_devices(user_id);
+  CREATE INDEX IF NOT EXISTS ix_push_subscriptions_user ON push_subscriptions(user_id);
+  CREATE TABLE IF NOT EXISTS push_vapid (id INTEGER PRIMARY KEY CHECK (id = 1), public_key TEXT NOT NULL, private_key TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS push_inbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -42,64 +43,38 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS ix_push_inbox_user ON push_inbox(user_id, created_at);
 `);
 
-/* ---------- FCM HTTP v1 ---------- */
-let serviceAccount;
-function credentials() {
-  if (serviceAccount !== undefined) return serviceAccount;
-  serviceAccount = null;
+/* ---------- VAPID keys ---------- */
+function vapid() {
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    return { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY };
+  }
+  let row = db.prepare('SELECT public_key, private_key FROM push_vapid WHERE id = 1').get();
+  if (!row) {
+    const k = webpush.generateVAPIDKeys();
+    db.prepare('INSERT OR IGNORE INTO push_vapid (id, public_key, private_key) VALUES (1, ?, ?)').run(k.publicKey, k.privateKey);
+    row = db.prepare('SELECT public_key, private_key FROM push_vapid WHERE id = 1').get();
+  }
+  return { publicKey: row.public_key, privateKey: row.private_key };
+}
+const KEYS = vapid();
+const subject = () => {
+  const s = process.env.VAPID_SUBJECT || process.env.APP_URL || '';
+  return /^(mailto:|https:\/\/)/.test(s) ? s : 'mailto:office@school.invalid';
+};
+webpush.setVapidDetails(subject(), KEYS.publicKey, KEYS.privateKey);
+
+// Sends one message to one browser subscription. Returns 'sent' | 'gone' | 'failed'.
+async function sendTo(sub, msg) {
   try {
-    const raw = process.env.FCM_SERVICE_ACCOUNT_JSON
-      || (process.env.FCM_SERVICE_ACCOUNT_FILE && fs.readFileSync(process.env.FCM_SERVICE_ACCOUNT_FILE, 'utf8'));
-    if (raw) {
-      const sa = JSON.parse(raw);
-      if (sa.client_email && sa.private_key && sa.project_id) serviceAccount = sa;
-      else console.error('FCM service account is missing client_email, private_key or project_id');
-    }
-  } catch (e) { console.error('Could not read FCM service account:', e.message); }
-  return serviceAccount;
-}
-
-let cachedToken = null;
-async function accessToken(sa) {
-  if (cachedToken && cachedToken.exp - 60 > Date.now() / 1000) return cachedToken.value;
-  const tokenUri = sa.token_uri || 'https://oauth2.googleapis.com/token';
-  const now = Math.floor(Date.now() / 1000);
-  const assertion = jwt.sign(
-    { iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging', aud: tokenUri, iat: now, exp: now + 3600 },
-    sa.private_key, { algorithm: 'RS256' });
-  const res = await fetch(tokenUri, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.access_token) throw new Error(`FCM auth failed (${res.status})`);
-  cachedToken = { value: data.access_token, exp: now + (data.expires_in || 3600) };
-  return cachedToken.value;
-}
-
-const UNREGISTERED = /UNREGISTERED|NOT_FOUND|INVALID_ARGUMENT.*registration/i;
-
-// Sends one message to one device token. Returns 'sent' | 'gone' | 'failed'.
-async function sendToToken(sa, token, msg) {
-  const base = (process.env.FCM_BASE_URL || 'https://fcm.googleapis.com').replace(/\/$/, '');
-  const res = await fetch(`${base}/v1/projects/${sa.project_id}/messages:send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await accessToken(sa)}` },
-    body: JSON.stringify({
-      message: {
-        token,
-        notification: { title: msg.title, body: msg.body },
-        data: { link: msg.link || '/home', kind: msg.kind || 'general', inbox_id: String(msg.inboxId || '') },
-        android: { priority: 'HIGH', notification: { channel_id: 'school_erp_default', click_action: 'FCM_PLUGIN_ACTIVITY' } },
-      },
-    }),
-  });
-  if (res.ok) return 'sent';
-  const text = await res.text().catch(() => '');
-  if (res.status === 404 || UNREGISTERED.test(text)) return 'gone';
-  console.error(`FCM send failed (${res.status}): ${text.slice(0, 200)}`);
-  return 'failed';
+    await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+      JSON.stringify({ title: msg.title, body: msg.body, link: msg.link || '/home', kind: msg.kind || 'general', inbox_id: msg.inboxId || null }),
+      { TTL: 24 * 3600, urgency: 'high' });
+    return 'sent';
+  } catch (e) {
+    if (e.statusCode === 404 || e.statusCode === 410) return 'gone';
+    console.error(`Web push failed (${e.statusCode || '-'}): ${String(e.body || e.message).slice(0, 200)}`);
+    return 'failed';
+  }
 }
 
 /* ---------- Notify ---------- */
@@ -107,26 +82,22 @@ const insertInbox = db.prepare('INSERT INTO push_inbox (user_id, title, body, li
 const setDelivery = db.prepare('UPDATE push_inbox SET delivery = ? WHERE id = ?');
 
 /**
- * Notify users by id. Each gets an inbox row; devices get an FCM push when configured.
- * Never throws: delivery problems are recorded on the inbox row.
+ * Notify users by id. Each gets an inbox row; each of their browsers/installed apps that allowed notifications
+ * gets a Web Push. Never throws: delivery problems are recorded on the inbox row.
  */
 async function notify(userIds, { title, body, link, kind }) {
   const ids = [...new Set((userIds || []).map(Number).filter(Boolean))];
   if (!ids.length || !title || !body) return { users: 0 };
-  const sa = credentials();
   let sent = 0;
   for (const uid of ids) {
     const inboxId = insertInbox.run(uid, String(title).slice(0, 120), String(body).slice(0, 500), link || null, kind || null).lastInsertRowid;
-    const devices = db.prepare('SELECT id, token FROM push_devices WHERE user_id = ?').all(uid);
-    if (!devices.length) { setDelivery.run('no_device', inboxId); continue; }
-    if (!sa) { setDelivery.run('not_configured', inboxId); continue; }
+    const subs = db.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(uid);
+    if (!subs.length) { setDelivery.run('no_device', inboxId); continue; }
     let ok = false;
-    for (const d of devices) {
-      try {
-        const r = await sendToToken(sa, d.token, { title, body, link, kind, inboxId });
-        if (r === 'sent') ok = true;
-        else if (r === 'gone') db.prepare('DELETE FROM push_devices WHERE id = ?').run(d.id);
-      } catch (e) { console.error('FCM error:', e.message); }
+    for (const sub of subs) {
+      const r = await sendTo(sub, { title, body, link, kind, inboxId });
+      if (r === 'sent') ok = true;
+      else if (r === 'gone') db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
     }
     setDelivery.run(ok ? 'sent' : 'failed', inboxId);
     if (ok) sent++;
@@ -282,28 +253,31 @@ events.on('api:change', (e) => {
 
 /* ---------- Routes ---------- */
 function register(router) {
-  router.post('/push/register', auth, safe((req, res) => {
-    const token = String(req.body.token || '').trim();
-    if (token.length < 20 || token.length > 4096) return res.status(400).json({ error: 'A valid device token is required' });
-    const platform = ['android', 'ios', 'web'].includes(req.body.platform) ? req.body.platform : 'android';
-    db.prepare(`INSERT INTO push_devices (user_id, token, platform, app_version, last_seen) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform,
-        app_version = excluded.app_version, last_seen = CURRENT_TIMESTAMP`)
-      .run(req.user.id, token, platform, String(req.body.app_version || '').slice(0, 40) || null);
+  router.get('/push/public-key', auth, (req, res) => res.json({ publicKey: KEYS.publicKey }));
+  // Save this browser's push subscription (from PushManager.subscribe) for the signed-in user.
+  router.post('/push/subscribe', auth, safe((req, res) => {
+    const sub = req.body?.subscription || req.body || {};
+    const endpoint = String(sub.endpoint || '');
+    const p256dh = String(sub.keys?.p256dh || ''), authKey = String(sub.keys?.auth || '');
+    if (!/^https:\/\//.test(endpoint) || endpoint.length > 2048 || !p256dh || !authKey || p256dh.length > 200 || authKey.length > 100) {
+      return res.status(400).json({ error: 'A valid push subscription is required' });
+    }
+    db.prepare(`INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth,
+        user_agent = excluded.user_agent, last_seen = CURRENT_TIMESTAMP`)
+      .run(req.user.id, endpoint, p256dh, authKey, String(req.headers['user-agent'] || '').slice(0, 200));
     res.json({ ok: true });
   }));
-  router.post('/push/unregister', auth, safe((req, res) => {
-    const info = db.prepare('DELETE FROM push_devices WHERE token = ? AND user_id = ?').run(String(req.body.token || ''), req.user.id);
+  // On sign-out the browser stops getting this user's notifications.
+  router.post('/push/unsubscribe', auth, safe((req, res) => {
+    const info = db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').run(String(req.body?.endpoint || ''), req.user.id);
     res.json({ ok: true, removed: info.changes });
   }));
   router.get('/push/status', auth, (req, res) => {
-    const out = {
-      configured: !!credentials(),
-      my_devices: db.prepare('SELECT COUNT(*) AS c FROM push_devices WHERE user_id = ?').get(req.user.id).c,
-    };
+    const out = { configured: true, my_devices: db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?').get(req.user.id).c };
     if (req.user.role === 'admin') {
-      out.devices = db.prepare('SELECT COUNT(*) AS c FROM push_devices').get().c;
-      out.users_with_app = db.prepare('SELECT COUNT(DISTINCT user_id) AS c FROM push_devices').get().c;
+      out.devices = db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions').get().c;
+      out.users_with_app = db.prepare('SELECT COUNT(DISTINCT user_id) AS c FROM push_subscriptions').get().c;
     }
     res.json(out);
   });
