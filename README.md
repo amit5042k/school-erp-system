@@ -138,6 +138,24 @@ npm run dev
 
 ---
 
+## One-click Node.js hosting (Hostinger "Deploy from GitHub", Render, Railway…)
+
+Hosts that run one Node app on one port use the combined `server.js` at the repository root: the website and the
+API share one address and port.
+
+| Setting | Value |
+| --- | --- |
+| Build command | `npm run build` |
+| Start command / entry file | `npm start` (or entry file `server.js`) |
+| Node.js | 20 or 22 |
+
+Nothing else is required. On first start the server creates the database and a Super Admin `admin`; set
+`ADMIN_PASSWORD` (and `SCHOOL_NAME`) in the host's environment variables, or read the one-time password in the
+application log. Data (database, uploads, backups and the sign-in secret) is kept in `~/school-erp-data`, outside the
+deploy folders, so redeploys keep it; set `ERP_DATA_DIR` (or `DB_PATH`, `UPLOAD_DIR`, `BACKUP_DIR`) to move it.
+Optional settings (SMS, email, WhatsApp, Razorpay, S3 backups) go in the host's environment variables, using the
+names in `backend/.env.example`.
+
 ## Production notes
 
 - Set a strong `JWT_SECRET` (`openssl rand -hex 32`); the backend refuses to start without one. Never commit `.env`.
