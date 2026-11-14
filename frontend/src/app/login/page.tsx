@@ -29,7 +29,7 @@ export default function LoginPage() {
       setToken(res.token);
       setUser(res.user);
       // Phones and the installed app open on the phone-first Home screen; computers get the full dashboard.
-      const app = window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(max-width: 640px)').matches;
+      const app = navigator.userAgent.includes('SchoolERP-App') || window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(max-width: 640px)').matches;
       router.push(app ? '/home' : '/dashboard');
     } catch (err: any) {
       setError(err.message || t('Login failed'));

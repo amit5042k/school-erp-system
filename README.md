@@ -182,13 +182,17 @@ Then approve the device in **Human Resource › Biometric Devices** and map staf
 (defaults to Employee No). Most ADMS firmware can't use HTTPS, so let nginx accept plain HTTP for `/iclock/` only
 (sample config on the Biometric Devices page).
 
-## Installable app (PWA) and notifications
+## Android and iOS apps, and the installable web app
 
-There is no separate Android or iOS app: the website installs as an app. On Android and desktop Chrome/Edge, Home shows
-**Install app**; on iPhone (iOS 16.4+) use Safari › Share › **Add to Home Screen**. The installed app opens full screen on
-Home, shows an offline screen without internet (`frontend/public/sw.js`), and gets Web Push notifications once the user
-taps **Turn on notifications**. Push works out of the box: a VAPID key pair is generated on first start and kept in the
-database (set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` to use your own). Installing and push need https.
+Staff, students and parents can use the **Android app**, the **iOS app** or the website, which also installs as an app
+(PWA). All three open the same ERP with the same logins; each person sees their own Home screen.
+
+- `mobile/` is a Capacitor project for both apps. GitHub Actions build them: **Android app** (APK for testing, signed
+  APK/AAB for Google Play) and **iOS app** (simulator build to check, signed .ipa for TestFlight/App Store). See
+  `mobile/README.md` for Firebase, the Apple push key, signing and store submission.
+- Notifications go to the apps (Firebase for Android, Apple Push for iOS: `FCM_*` / `APNS_*` in `backend/.env`), to
+  browsers and the installed web app (Web Push, no setup), and always to the in-app Notifications page.
+- The website installs from Home (**Install app**) on Android/desktop, or Safari › Share › Add to Home Screen on iPhone.
 
 ## How the code is organised
 

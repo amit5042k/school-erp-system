@@ -1,0 +1,9 @@
+{
+  "appId": "in.schoolerp.app",
+  "appName": "School ERP",
+  "erpUrl": "https://nextgenos.in",
+  "apiUrl": "https://nextgenos.in",
+  "themeColor": "#133b7a",
+  "versionName": "1.0.0",
+  "versionCode": 1
+}

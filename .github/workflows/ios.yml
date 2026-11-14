@@ -1,0 +1,130 @@
+# Builds the School ERP iOS app on a GitHub macOS runner.
+# Always: a simulator build (to check the app compiles; drag it onto an iOS Simulator to try it).
+# With the signing secrets: a signed .ipa for the App Store, uploaded to TestFlight when the API key is set too.
+#
+# Repository settings → Secrets and variables → Actions:
+#   Variables (optional): ERP_URL, API_URL (default: mobile/app.config.json), IOS_TEAM_ID
+#   Secrets for a signed build (Apple Developer Program account):
+#     IOS_CERT_P12_BASE64      base64 of the "Apple Distribution" certificate exported as .p12
+#     IOS_CERT_PASSWORD        that .p12's password
+#     IOS_PROFILE_BASE64       base64 of the App Store provisioning profile for the app id (with Push Notifications)
+#   Secrets to upload to TestFlight (App Store Connect › Users and Access › Integrations › Keys):
+#     ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8_BASE64
+name: iOS app
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: Version shown to users (e.g. 1.0.1)
+        required: false
+      build_number:
+        description: Whole number, must increase with every App Store upload
+        required: false
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/ios.yml'
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      ERP_URL: ${{ vars.ERP_URL }}
+      API_URL: ${{ vars.API_URL }}
+      VERSION_NAME: ${{ inputs.version_name || '1.0.0' }}
+      BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
+      HAS_SIGNING: ${{ secrets.IOS_CERT_P12_BASE64 != '' && secrets.IOS_PROFILE_BASE64 != '' }}
+      HAS_ASC: ${{ secrets.ASC_KEY_P8_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Configure and sync
+        run: VERSION_NAME="$VERSION_NAME" VERSION_CODE="$BUILD_NUMBER" npm run sync:ios
+
+      - name: Build for the iOS Simulator (unsigned)
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build | tail -40
+          cd build/Build/Products/Debug-iphonesimulator && zip -qry "$GITHUB_WORKSPACE/SchoolERP-simulator.app.zip" App.app
+
+      - name: Install signing certificate and profile
+        if: env.HAS_SIGNING == 'true'
+        env:
+          IOS_CERT_P12_BASE64: ${{ secrets.IOS_CERT_P12_BASE64 }}
+          IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+        run: |
+          KC="$RUNNER_TEMP/signing.keychain-db"; KCPW="$(uuidgen)"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          echo "$IOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$IOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KCPW" "$KC" >/dev/null
+          security list-keychain -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
+          echo "$IOS_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")
+          NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' "$RUNNER_TEMP/profile.plist")
+          TEAM=$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$RUNNER_TEMP/profile.plist")
+          APPID=$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$RUNNER_TEMP/profile.plist" | sed "s/^$TEAM\.//")
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$RUNNER_TEMP/profile.mobileprovision" ~/Library/MobileDevice/Provisioning\ Profiles/"$UUID".mobileprovision
+          { echo "PROFILE_NAME=$NAME"; echo "TEAM_ID=${{ vars.IOS_TEAM_ID }}"; echo "PROFILE_APP_ID=$APPID"; } >> "$GITHUB_ENV"
+          [ -n "${{ vars.IOS_TEAM_ID }}" ] || echo "TEAM_ID=$TEAM" >> "$GITHUB_ENV"
+
+      - name: Build signed app for the App Store (.ipa)
+        if: env.HAS_SIGNING == 'true'
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" PRODUCT_BUNDLE_IDENTIFIER="$PROFILE_APP_ID" \
+            MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" archive | tail -40
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict><key>$PROFILE_APP_ID</key><string>$PROFILE_NAME</string></dict>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$GITHUB_WORKSPACE/ipa"
+
+      - name: Upload to TestFlight
+        if: env.HAS_SIGNING == 'true' && env.HAS_ASC == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_"$ASC_KEY_ID".p8
+          xcrun altool --upload-app -f "$GITHUB_WORKSPACE"/ipa/*.ipa -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: school-erp-ios-${{ env.BUILD_NUMBER }}
+          path: |
+            SchoolERP-simulator.app.zip
+            ipa/*.ipa
+          if-no-files-found: error

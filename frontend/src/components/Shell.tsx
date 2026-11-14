@@ -7,6 +7,7 @@ import { api, clearSession, getStoredUser, getToken, setUser } from '@/lib/api';
 import { areaForPage, isSelf, levelFor, type Perms } from '@/lib/permissions';
 import LicenceBanner, { useLicence } from '@/components/LicenceBanner';
 import { disableNotifications } from '@/components/Pwa';
+import { unregisterPush } from '@/components/NativeBridge';
 import ChildSwitcher from '@/components/ChildSwitcher';
 import { LANGS, getLang, setLang, t, type Lang } from '@/lib/i18n';
 
@@ -150,7 +151,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('click', onDoc);
   }, []);
 
-  async function logout() { await disableNotifications().catch(() => {}); clearSession(); router.replace('/login'); }
+  async function logout() { await Promise.all([disableNotifications().catch(() => {}), unregisterPush().catch(() => {})]); clearSession(); router.replace('/login'); }
 
   if (!user) return <div className="min-h-screen grid place-items-center text-gray-500">{t('Loading…')}</div>;
 

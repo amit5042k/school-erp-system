@@ -17,6 +17,8 @@ if (typeof window !== 'undefined') {
   window.addEventListener('appinstalled', () => { deferredInstall = null; changed(); });
 }
 
+// Inside the Android/iOS app the app itself handles installing and notifications.
+const inNativeApp = () => typeof window !== 'undefined' && (!!(window as any).Capacitor?.isNativePlatform?.() || /SchoolERP-App\//.test(navigator.userAgent));
 const isStandalone = () => typeof window !== 'undefined'
   && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true);
 const isIos = () => typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -61,7 +63,7 @@ export async function disableNotifications() {
 /** Mounted once by Shell: keeps the service worker registered and this browser's subscription linked to the user. */
 export function PwaBridge() {
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
+    if (!('serviceWorker' in navigator) || inNativeApp()) return;
     registration().catch(() => {});
     if (pushSupported() && Notification.permission === 'granted' && getToken()) enableNotifications().catch(() => {});
   }, []);
@@ -80,6 +82,7 @@ export function AppSetup() {
     return () => { listeners.delete(f); };
   }, []);
 
+  if (inNativeApp()) return null;
   const installed = isStandalone();
   const canInstall = !installed && !!deferredInstall;
   const iosHint = !installed && isIos();

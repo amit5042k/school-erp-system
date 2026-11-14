@@ -3,7 +3,7 @@ name: Tests
 
 on:
   push:
-    paths-ignore: ['docs/**', '**.md']
+    paths-ignore: ['mobile/**', 'docs/**', '**.md']
   pull_request:
 
 jobs:

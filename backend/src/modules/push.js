@@ -1,10 +1,11 @@
-// Web Push notifications for the installed web app (PWA) and any browser that allows them, plus an inbox that
-// always works. Notifications are triggered from utils/events 'api:change', so other modules need no edits.
+// Notifications for the Android and iOS apps (utils/appPush.js), the installed web app (PWA) and browsers that allow
+// them (Web Push), plus an inbox that always works. Notifications are triggered from utils/events 'api:change', so other modules need no edits.
 //
 // Works without setup: a VAPID key pair is generated on first start and kept in the database. To use your own
 // (e.g. to share one across servers), set in backend/.env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and
 // VAPID_SUBJECT (mailto:office@yourschool.in or https://erp.yourschool.in).
 const webpush = require('web-push');
+const { sendToDevice, appPushStatus } = require('../utils/appPush');
 const { db, ROLES, auth, role, safe, today } = require('./_kit');
 const { familyUserIds } = require('../utils/family');
 const events = require('../utils/events');
@@ -92,14 +93,22 @@ async function notify(userIds, { title, body, link, kind }) {
   for (const uid of ids) {
     const inboxId = insertInbox.run(uid, String(title).slice(0, 120), String(body).slice(0, 500), link || null, kind || null).lastInsertRowid;
     const subs = db.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(uid);
-    if (!subs.length) { setDelivery.run('no_device', inboxId); continue; }
-    let ok = false;
+    const devices = db.prepare('SELECT id, token, platform FROM push_devices WHERE user_id = ?').all(uid);
+    if (!subs.length && !devices.length) { setDelivery.run('no_device', inboxId); continue; }
+    let ok = false, unconfigured = 0;
+    const msg = { title, body, link, kind, inboxId };
     for (const sub of subs) {
-      const r = await sendTo(sub, { title, body, link, kind, inboxId });
+      const r = await sendTo(sub, msg);
       if (r === 'sent') ok = true;
       else if (r === 'gone') db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
     }
-    setDelivery.run(ok ? 'sent' : 'failed', inboxId);
+    for (const d of devices) {
+      const r = await sendToDevice(d, msg);
+      if (r === 'sent') ok = true;
+      else if (r === 'gone') db.prepare('DELETE FROM push_devices WHERE id = ?').run(d.id);
+      else if (r === 'not_configured') unconfigured++;
+    }
+    setDelivery.run(ok ? 'sent' : (unconfigured && unconfigured === subs.length + devices.length ? 'not_configured' : 'failed'), inboxId);
     if (ok) sent++;
   }
   return { users: ids.length, sent };
@@ -273,11 +282,28 @@ function register(router) {
     const info = db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').run(String(req.body?.endpoint || ''), req.user.id);
     res.json({ ok: true, removed: info.changes });
   }));
+  // The Android/iOS app registers its device token after sign-in, and removes it on sign-out.
+  router.post('/push/register', auth, safe((req, res) => {
+    const token = String(req.body.token || '').trim();
+    if (token.length < 20 || token.length > 4096) return res.status(400).json({ error: 'A valid device token is required' });
+    const platform = req.body.platform === 'ios' ? 'ios' : 'android';
+    db.prepare(`INSERT INTO push_devices (user_id, token, platform, app_version, last_seen) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform,
+        app_version = excluded.app_version, last_seen = CURRENT_TIMESTAMP`)
+      .run(req.user.id, token, platform, String(req.body.app_version || '').slice(0, 40) || null);
+    res.json({ ok: true });
+  }));
+  router.post('/push/unregister', auth, safe((req, res) => {
+    const info = db.prepare('DELETE FROM push_devices WHERE token = ? AND user_id = ?').run(String(req.body.token || ''), req.user.id);
+    res.json({ ok: true, removed: info.changes });
+  }));
   router.get('/push/status', auth, (req, res) => {
-    const out = { configured: true, my_devices: db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?').get(req.user.id).c };
+    const mine = (t) => db.prepare(`SELECT COUNT(*) AS c FROM ${t} WHERE user_id = ?`).get(req.user.id).c;
+    const out = { configured: true, apps: appPushStatus(), my_devices: mine('push_subscriptions') + mine('push_devices') };
     if (req.user.role === 'admin') {
-      out.devices = db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions').get().c;
-      out.users_with_app = db.prepare('SELECT COUNT(DISTINCT user_id) AS c FROM push_subscriptions').get().c;
+      out.devices = db.prepare('SELECT (SELECT COUNT(*) FROM push_subscriptions) + (SELECT COUNT(*) FROM push_devices) AS c').get().c;
+      out.users_with_app = db.prepare('SELECT COUNT(*) AS c FROM (SELECT user_id FROM push_subscriptions UNION SELECT user_id FROM push_devices)').get().c;
+      out.by_platform = db.prepare('SELECT platform, COUNT(*) AS c FROM push_devices GROUP BY platform').all();
     }
     res.json(out);
   });

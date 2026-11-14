@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import '../styles/globals.css';
 import LanguageGate from '@/components/LanguageGate';
 import { PwaBridge } from '@/components/Pwa';
+import NativeBridge from '@/components/NativeBridge';
 
 export const metadata: Metadata = {
   title: 'School Management System',
@@ -17,7 +18,7 @@ export const viewport: Viewport = { themeColor: '#133b7a', width: 'device-width'
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body><PwaBridge /><LanguageGate>{children}</LanguageGate></body>
+      <body><PwaBridge /><NativeBridge /><LanguageGate>{children}</LanguageGate></body>
     </html>
   );
 }
