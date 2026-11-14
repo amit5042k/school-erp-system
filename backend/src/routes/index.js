@@ -146,6 +146,9 @@ router.post('/communications', authRequired, requireRole(...STAFF), m.communicat
 router.get('/users', authRequired, requireRole(...ADMIN), m.users.list);
 router.post('/users', authRequired, requireRole(...ADMIN), m.users.create);
 router.post('/users/staff-logins', authRequired, requireRole(...ADMIN), m.users.staffLogins);
+router.get('/users/old-staff-logins', authRequired, requireRole(...ADMIN), m.users.oldStaffLogins);
+router.post('/users/old-staff-logins/delete', authRequired, requireRole(...ADMIN), m.users.removeOldStaffLogins);
+router.delete('/users/:id', authRequired, requireRole(...ADMIN), m.users.remove);
 router.post('/users/:id/active', authRequired, requireRole(...ADMIN), m.users.setActive);
 router.post('/users/:id/reset-password', authRequired, requireRole(...ADMIN), m.users.resetPassword);
 router.post('/users/:id/role', authRequired, requireRole(...ADMIN), m.users.setRole);

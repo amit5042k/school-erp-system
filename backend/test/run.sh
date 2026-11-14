@@ -24,8 +24,9 @@ run() {
 }
 export B="localhost:$PORT/api" API="http://localhost:$PORT/api"
 run "Regression (access control, validation, data integrity)" bash test/regression.sh
-run "Staff roles and permissions" bash test/roles.sh
 run "Every report for every role" node test/reports.js
+# Last: it ends by deleting the demo staff logins the other suites sign in with.
+run "Staff roles and permissions" bash test/roles.sh
 
 [ $status -eq 0 ] && echo "ALL TESTS PASSED" || { echo "SOME TESTS FAILED (server log: kept below)"; tail -20 "$TMP/server.log"; }
 exit $status

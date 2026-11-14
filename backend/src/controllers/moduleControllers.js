@@ -594,6 +594,10 @@ const userBeyondMine = (req, targetId) => {
   return u?.role === 'teacher' ? roleBeyondMine(req, u.role_key || 'teacher') : null;
 };
 
+const oldStaff = () => db.prepare(`SELECT u.id, u.username, u.full_name, u.last_login_at, t.employee_no, t.official_email
+  FROM users u LEFT JOIN teachers t ON t.id = u.linked_id
+  WHERE u.role = 'teacher' AND u.username NOT LIKE '%_@_%._%' ORDER BY u.username`).all();
+
 exports.users = {
   list(req, res) {
     const rows = db.prepare('SELECT id, username, role, role_key, full_name, email, phone, linked_id, active, last_login_at FROM users ORDER BY id').all();
@@ -625,6 +629,32 @@ exports.users = {
       `).run(uname, bcrypt.hashSync(password, 10), role, roleKey, full_name, email || (role === 'teacher' ? uname : null), phone || null, linked_id || null);
       res.status(201).json({ id: info.lastInsertRowid, username: uname });
     } catch (e) { dbError(res, e); }
+  },
+  // Removes a login. Records made by it (receipts, approvals, posts) stay; they just lose the name of who did it.
+  remove(req, res) {
+    const u = db.prepare('SELECT id, role, username FROM users WHERE id = ?').get(req.params.id);
+    if (!u) return res.status(404).json({ error: 'Not found' });
+    if (u.id === req.user.id) return res.status(400).json({ error: "You can't delete your own login" });
+    if (touchesSuperAdmin(req, u.id)) return res.status(403).json({ error: 'Only a Super Admin can change a Super Admin account' });
+    if (userBeyondMine(req, u.id)) return res.status(403).json({ error: 'This login has more access than yours; ask a Super Admin' });
+    if (u.role === 'admin' && db.prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND active = 1").get().c <= 1) {
+      return res.status(400).json({ error: "The last Super Admin can't be deleted" });
+    }
+    db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+    res.json({ ok: true, deleted: u.username });
+  },
+  // Staff logins made by hand before usernames were official emails (username isn't an email address).
+  oldStaffLogins(req, res) {
+    res.json(oldStaff());
+  },
+  removeOldStaffLogins(req, res) {
+    const deleted = [], kept = [];
+    for (const u of oldStaff()) {
+      if (u.id === req.user.id || userBeyondMine(req, u.id)) { kept.push({ username: u.username, reason: u.id === req.user.id ? 'your own login' : 'more access than yours' }); continue; }
+      db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+      deleted.push(u.username);
+    }
+    res.json({ deleted, kept });
   },
   // Logins for every active staff member who has an official email but no login yet.
   staffLogins(req, res) {

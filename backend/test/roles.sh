@@ -144,5 +144,14 @@ check "users list shows role names" "$(curl -s $B/users -H "$HA" | j "x.find(u=>
 S=$(tok ADM2025001 student123)
 check "student still blocked from fees list" "$(code $B/fees -H "$(H $S)")" 403
 check "student still sees own fees" "$(code $B/fees/student/1 -H "$(H $S)")" 200
+# Deleting logins.
+uidof(){ curl -s $B/users -H "$HA" | j "(x.find(u=>u.username==='$1')||{}).id"; }
+check "can't delete your own login" "$(code -X DELETE $B/users/$(uidof admin) -H "$HA")" 400
+check "IT head can't delete the principal's login" "$(code -X DELETE $B/users/$(uidof pr$SFX@test.example) -H "$(H $IT)")" 403
+check "old staff logins are listed (usernames that aren't emails)" "$(curl -s $B/users/old-staff-logins -H "$HA" | j "x.some(u=>u.username==='ritu') && !x.some(u=>u.username.includes('@'))")" true
+check "admin deletes a login" "$(code -X DELETE $B/users/$(uidof os$SFX@test.example) -H "$HA")" 200
+check "a deleted login is signed out at once" "$(code $B/auth/me -H "$(H $OS)")" 401
+check "bulk-deleting old staff logins" "$(curl -s -X POST $B/users/old-staff-logins/delete -H "$HA" | j "x.deleted.includes('ritu')")" true
+check "none left afterwards" "$(curl -s $B/users/old-staff-logins -H "$HA" | j 'x.length')" 0
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

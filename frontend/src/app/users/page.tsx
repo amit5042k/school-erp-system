@@ -18,12 +18,13 @@ export default function UsersPage() {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [linked, setLinked] = useState('');
+  const [old, setOld] = useState<{ id: number; username: string; full_name: string; employee_no?: string; official_email?: string | null; last_login_at?: string | null }[]>([]);
   const [fullName, setFullName] = useState('');
   const [bulk, setBulk] = useState<{ created: Made[]; skipped: { name: string; employee_no?: string; reason: string }[] } | null>(null);
 
   async function load() { try { setRows(await api('/users')); } catch (e: any) { setErr(e.message); } }
   useEffect(() => {
-    load();
+    load(); loadOld();
     api<Person[]>('/students').then(setStudents).catch(() => {});
     api<Person[]>('/teachers').then(setTeachers).catch(() => {});
     api<{ roles: { key: string; name: string }[] }>('/roles').then(r => setStaffRoles(r.roles)).catch(() => {});
@@ -64,6 +65,22 @@ export default function UsersPage() {
     setErr(null); setOk(null);
     try { await api(`/users/${u.id}/role`, { method: 'POST', body: JSON.stringify({ role_key: key }) }); setOk(`${u.username} is now ${staffRoles.find(r => r.key === key)?.name || key}.`); load(); }
     catch (e: any) { setErr(e.message); }
+  }
+  async function removeLogin(u: any) {
+    if (!confirm(`Delete the login "${u.username}"? They will be signed out and can't sign in with it again. Records they made are kept.`)) return;
+    setErr(null); setOk(null);
+    try { await api(`/users/${u.id}`, { method: 'DELETE' }); setOk(`Login ${u.username} deleted.`); load(); loadOld(); }
+    catch (e: any) { setErr(e.message); }
+  }
+  async function loadOld() { try { setOld(await api('/users/old-staff-logins')); } catch { setOld([]); } }
+  async function removeOld() {
+    if (!confirm(`Delete these ${old.length} old staff login(s)? Then use "Create staff logins" to give them logins named after their official email.`)) return;
+    setErr(null); setOk(null);
+    try {
+      const r = await api<{ deleted: string[]; kept: { username: string; reason: string }[] }>('/users/old-staff-logins/delete', { method: 'POST' });
+      setOk(`Deleted ${r.deleted.length} old login(s)${r.kept.length ? `; kept ${r.kept.map(k => `${k.username} (${k.reason})`).join(', ')}` : ''}.`);
+      load(); loadOld();
+    } catch (e: any) { setErr(e.message); }
   }
   async function reset(u: any) {
     const p = prompt(`New password for ${u.username} (at least 6 characters):`);
@@ -124,6 +141,16 @@ export default function UsersPage() {
         <div className="md:col-span-3"><button className="btn btn-primary" disabled={role === 'teacher' && !staffUsername}>Create User</button></div>
       </form>
 
+      {old.length > 0 && (
+        <div className="card p-4 mb-4 text-sm border-amber-200 bg-amber-50">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><div className="font-semibold text-amber-800">Old staff logins ({old.length})</div>
+              <div className="text-gray-700">Made by hand before staff usernames became their official email: {old.map(o => o.username).join(', ')}.</div></div>
+            <button className="btn bg-red-600 text-white hover:bg-red-700" onClick={removeOld}>Delete old staff logins</button>
+          </div>
+        </div>
+      )}
+
       <div className="card p-4 mb-4 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><div className="font-semibold text-brand-700">Staff logins</div>
@@ -165,7 +192,8 @@ export default function UsersPage() {
             <td>{u.active ? <span className="badge badge-green">Active</span> : <span className="badge badge-red">Disabled</span>}</td>
             <td className="whitespace-nowrap">
               <button onClick={() => toggle(u)} className="text-xs text-brand-600 hover:underline mr-2">{u.active ? 'Disable' : 'Enable'}</button>
-              <button onClick={() => reset(u)} className="text-xs text-amber-700 hover:underline">Reset Password</button>
+              <button onClick={() => reset(u)} className="text-xs text-amber-700 hover:underline mr-2">Reset Password</button>
+              <button onClick={() => removeLogin(u)} className="text-xs text-red-600 hover:underline">Delete</button>
             </td></tr>
           ))}
             {!rows.length && <tr><td colSpan={7} className="text-center py-3 text-gray-500">No users.</td></tr>}
