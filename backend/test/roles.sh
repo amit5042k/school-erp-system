@@ -86,6 +86,25 @@ check "principal sees own payslips" "$(code $B/pay/my-slips -H "$(H $P)")" 200
 check "non-teaching staff sees own in/out timing" "$(code $B/hr/my-timing -H "$(H $ST)")" 200
 check "non-teaching staff can't see staff attendance" "$(code "$B/hr/staff-attendance?date=2026-01-05" -H "$(H $ST)")" 403
 check "timing shows no attendance status" "$(curl -s $B/hr/my-timing -H "$(H $CL)" | j "JSON.stringify(x).includes('status')")" false
+# Fine-grained switches: the level stays, individual kinds of action can be switched off per area.
+curl -s -X PUT $B/roles/clerk -H "$(H $P)" -H "$C" -d '{"actions":{"students":{"delete":false},"front-office":{"export":false}}}' >/dev/null
+check "clerk with Delete off can't delete a student" "$(code -X DELETE $B/students/999999 -H "$(H $CL)")" 403
+check "clerk with Delete off: message names the action" "$(curl -s -X DELETE $B/students/999999 -H "$(H $CL)" | j 'x.code')" ACTION_DENIED
+check "clerk can still add (not blocked by the switch)" "$([ "$(code -X POST $B/students -H "$(H $CL)" -H "$C" -d '{}')" != 403 ] && echo ok)" ok
+check "role info carries the switches" "$(curl -s $B/auth/me -H "$(H $CL)" | j 'x.actions.students.delete')" false
+curl -s -X PUT $B/roles/office-superintendent -H "$(H $P)" -H "$C" -d '{"actions":{"hr":{"approve":false}}}' >/dev/null
+LV=$(curl -s -X POST $B/leaves -H "$HA" -H "$C" -d '{"teacher_id":1,"leave_type":"Casual Leave","from_date":"2027-01-11","to_date":"2027-01-11","reason":"x"}' | j 'x.id')
+check "office supdt with Approve off can't decide leave" "$(code -X POST $B/leaves/$LV/decision -H "$(H $OS)" -H "$C" -d '{"action":"approve"}')" 403
+curl -s -X PUT $B/roles/accountant -H "$(H $P)" -H "$C" -d '{"actions":{"accounts":{"export":false}}}' >/dev/null
+check "accountant with Export off can't download Tally XML" "$(code "$B/accounts/tally/vouchers.xml?from=2026-04-01&to=2027-03-31" -H "$(H $AC)")" 403
+check "accountant can still view accounts" "$(code $B/accounts/summary -H "$(H $AC)")" 200
+curl -s -X PUT $B/roles/academic-coordinator -H "$(H $P)" -H "$C" -d '{"actions":{"hr":{"add":false}}}' >/dev/null
+check "coordinator with HR Add off still applies own leave (self-service)" "$(code -X POST $B/leaves -H "$(H $CO)" -H "$C" -d '{"leave_type":"Casual Leave","from_date":"2027-02-01","to_date":"2027-02-01","reason":"x"}')" 201
+curl -s -X PUT $B/roles/it-head -H "$HA" -H "$C" -d '{"actions":{"library":{"export":false}}}' >/dev/null
+check "IT head can't create a role with an action they lack" "$(code -X POST $B/roles -H "$(H $IT)" -H "$C" -d '{"name":"Lib '$SFX'","perms":{"library":"standard"}}')" 403
+check "IT head can create it with that action off" "$(code -X POST $B/roles -H "$(H $IT)" -H "$C" -d '{"name":"Lib '$SFX'","perms":{"library":"standard"},"actions":{"library":{"export":false}}}')" 201
+curl -s -X PUT $B/roles/it-head -H "$HA" -H "$C" -d '{"actions":{"library":{"export":true}}}' >/dev/null
+for r in clerk office-superintendent accountant academic-coordinator; do curl -s -X PUT $B/roles/$r -H "$(H $P)" -H "$C" -d '{"actions":{"students":{"delete":true},"front-office":{"export":true},"hr":{"approve":true,"add":true},"accounts":{"export":true}}}' >/dev/null; done
 # Principal and role editing
 check "principal sees everything (payroll)" "$(code $B/payroll -H "$(H $P)")" 200
 check "principal lists roles" "$(curl -s $B/roles -H "$(H $P)" | j 'x.roles.length>=8&&x.areas.length===15')" true

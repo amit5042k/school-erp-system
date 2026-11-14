@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { t } from '@/lib/i18n';
-import { api, fileUrl, upload } from '@/lib/api';
+import { canDo } from '@/lib/permissions';
+import { api, fileUrl, getStoredUser, upload } from '@/lib/api';
 
 export type FieldDef = {
   name: string;
@@ -37,10 +38,16 @@ type Props = {
 };
 
 export default function ModulePage({
-  title, endpoint, fields, canCreate = true, createLabel = '+ Add New',
+  title, endpoint, fields, createLabel = '+ Add New',
   emptyText = 'No records.', rowActions, initial = {}, searchKeys = [], children,
-  canEdit = false, canDelete = true, listQuery = '',
+  canEdit: canEditProp = false, canDelete: canDeleteProp = true, canCreate: canCreateProp = true, listQuery = '',
 }: Props) {
+  // The role's Add / Edit / Delete switches for this screen's area narrow what the page offers.
+  const me = typeof window !== 'undefined' ? getStoredUser<any>() : null;
+  const here = typeof window !== 'undefined' ? window.location.pathname : '';
+  const canCreate = canCreateProp && canDo(me, here, 'add');
+  const canEdit = canEditProp && canDo(me, here, 'edit');
+  const canDelete = canDeleteProp && canDo(me, here, 'delete');
   const [rows, setRows] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);

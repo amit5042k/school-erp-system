@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, downloadCsv, fmtDate, fmtMoney, sessionList } from '@/lib/api';
 import { t as tr } from '@/lib/i18n';
+import { canDoInArea, REPORT_GROUP_AREAS } from '@/lib/permissions';
+import { getStoredUser } from '@/lib/api';
 
 export type ReportParam = {
   name: string; label?: string; required?: boolean; default?: string;
@@ -103,9 +105,9 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
           <h2 className="text-xl font-bold text-brand-700">{tr(res?.title || 'Report')}</h2>
           {res?.description && <div className="text-sm text-gray-500">{res.description}</div>}
         </div>
-        {res && (
+        {res && canDoInArea(getStoredUser<any>(), REPORT_GROUP_AREAS[res.group] ?? null, 'export') && (
           <div className="flex gap-2 no-print">
-            <button className="btn btn-accent text-sm" onClick={() => downloadCsv(`${res.key}-${new Date().toISOString().slice(0, 10)}`, res.columns, res.rows)}>{tr('Download Excel')}</button>
+            <button className="btn btn-accent text-sm" onClick={() => downloadCsv(`${res.key}-${new Date().toISOString().slice(0, 10)}`, res.columns, res.rows, REPORT_GROUP_AREAS[res.group] ?? null)}>{tr('Download Excel')}</button>
             <button className="btn bg-gray-200 text-sm" onClick={() => window.print()}>{tr('Print')}</button>
           </div>
         )}

@@ -8,7 +8,7 @@ const roles = require('../utils/roles');
 function roleInfo(user) {
   const r = user.role === 'teacher' ? roles.get(user.role_key || 'teacher') : null;
   const name = user.role === 'admin' ? 'Super Admin' : r ? r.name : user.role === 'student' ? 'Student' : 'Parent';
-  return { baseRole: user.role, roleKey: r ? r.key : null, roleName: name, perms: r ? r.perms : null };
+  return { baseRole: user.role, roleKey: r ? r.key : null, roleName: name, perms: r ? r.perms : null, actions: r ? r.actions : null };
 }
 
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);

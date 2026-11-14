@@ -6,7 +6,9 @@ import { api, getStoredUser } from '@/lib/api';
 
 type Level = 'none' | 'standard' | 'full';
 type Area = { key: string; label: string };
-type Role = { key: string; name: string; builtin: boolean; users: number; perms: Record<string, Level> };
+type Acts = Record<string, Record<string, boolean>>;
+type ActionDef = { key: string; label: string; hint: string };
+type Role = { key: string; name: string; builtin: boolean; users: number; perms: Record<string, Level>; actions: Acts };
 
 const LEVEL_UI: { key: Level; label: string; hint: string; on: string }[] = [
   { key: 'none', label: 'No access', hint: 'Hidden, except their own records', on: 'bg-gray-700 text-white' },
@@ -20,6 +22,8 @@ export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [sel, setSel] = useState<string>('principal');
   const [draft, setDraft] = useState<Record<string, Level> | null>(null);
+  const [acts, setActs] = useState<Acts>({});
+  const [actionDefs, setActionDefs] = useState<ActionDef[]>([]);
   const [name, setName] = useState('');
   const [newRole, setNewRole] = useState({ name: '', copy_from: 'staff' });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -27,8 +31,8 @@ export default function RolesPage() {
 
   async function load(keep?: string) {
     try {
-      const r = await api<{ areas: Area[]; roles: Role[] }>('/roles');
-      setAreas(r.areas); setRoles(r.roles);
+      const r = await api<{ areas: Area[]; roles: Role[]; actions: ActionDef[] }>('/roles');
+      setAreas(r.areas); setRoles(r.roles); setActionDefs(r.actions || []);
       const k = keep && r.roles.some(x => x.key === keep) ? keep : r.roles[0]?.key;
       if (k) pick(k, r.roles);
     } catch (e: any) { flash(e.message, false); }
@@ -39,16 +43,19 @@ export default function RolesPage() {
     const r = list.find(x => x.key === key);
     if (!r) return;
     setSel(key); setDraft({ ...r.perms }); setName(r.name);
+    setActs(JSON.parse(JSON.stringify(r.actions || {})));
   }
 
   const role = roles.find(r => r.key === sel);
   const ownRole = me?.baseRole === 'teacher' && me?.roleKey === sel;
-  const dirty = useMemo(() => !!role && !!draft && (name !== role.name || areas.some(a => draft[a.key] !== role.perms[a.key])), [role, draft, name, areas]);
+  const dirty = useMemo(() => !!role && !!draft && (name !== role.name || areas.some(a => draft[a.key] !== role.perms[a.key])
+    || JSON.stringify(acts) !== JSON.stringify(role.actions || {})), [role, draft, name, areas, acts]);
+  const toggle = (area: string, act: string) => setActs(x => ({ ...x, [area]: { ...(x[area] || {}), [act]: !(x[area]?.[act] !== false) } }));
 
   async function save() {
     if (!role || !draft) return;
     try {
-      await api(`/roles/${role.key}`, { method: 'PUT', body: JSON.stringify({ name, perms: draft }) });
+      await api(`/roles/${role.key}`, { method: 'PUT', body: JSON.stringify({ name, perms: draft, actions: acts }) });
       flash(`${name} saved. People with this role get the change straight away.`);
       load(role.key);
     } catch (e: any) { flash(e.message, false); }
@@ -74,8 +81,9 @@ export default function RolesPage() {
       <div className="text-xs text-gray-500 mb-1">Settings › Roles &amp; Permissions</div>
       <h2 className="text-xl font-bold text-brand-700">Roles &amp; Permissions</h2>
       <p className="text-sm text-gray-600 mb-4 max-w-3xl">
-        Each staff login has one role. For every area choose <b>No access</b>, <b>Standard</b> (what a teacher can do) or <b>Full</b> (what the Super Admin can do).
-        Everyone can always see their own leaves, payslips, timetable and school notices. Students and parents aren&apos;t affected.
+        Each staff login has one role. For every area choose <b>No access</b>, <b>Standard</b> (what a teacher can do) or <b>Full</b> (what the Super Admin can do),
+        then switch off any actions the role shouldn&apos;t have there: <b>Add</b>, <b>Edit</b>, <b>Delete</b>, <b>Approve</b> or <b>Export</b>.
+        Everyone can always see their own leaves, payslips, timing, timetable and school notices. Students and parents aren&apos;t affected.
       </p>
 
       {msg && <div className={`text-sm rounded px-3 py-2 mb-3 border ${msg.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>{msg.text}</div>}
@@ -115,7 +123,8 @@ export default function RolesPage() {
 
             <div className="overflow-x-auto">
               <table className="table text-sm">
-                <thead><tr><th>Area</th><th className="w-[22rem]">Access</th></tr></thead>
+                <thead><tr><th>Area</th><th className="w-[18rem]">Access</th>
+                  {actionDefs.map(x => <th key={x.key} className="text-center" title={x.hint}>{x.label}</th>)}</tr></thead>
                 <tbody>
                   {areas.map(a => (
                     <tr key={a.key}>
@@ -131,6 +140,16 @@ export default function RolesPage() {
                           ))}
                         </div>
                       </td>
+                      {actionDefs.map(x => {
+                        const off = draft[a.key] === 'none';
+                        return (
+                          <td key={x.key} className="text-center">
+                            <input type="checkbox" aria-label={`${a.label}: ${x.label}`} title={off ? 'No access to this area' : x.hint}
+                              className="w-4 h-4 accent-green-600" disabled={ownRole || off}
+                              checked={!off && acts[a.key]?.[x.key] !== false} onChange={() => toggle(a.key, x.key)} />
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -144,6 +163,9 @@ export default function RolesPage() {
             </div>
             <p className="text-xs text-gray-500 mt-3">
               {LEVEL_UI.map(l => <span key={l.key} className="mr-4"><b>{l.label}:</b> {l.hint}</span>)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {actionDefs.map(x => <span key={x.key} className="mr-4"><b>{x.label}:</b> {x.hint}</span>)}
             </p>
           </div>
         )}

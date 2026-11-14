@@ -7,7 +7,7 @@ const { db, ROLES, auth, role, safe, today } = require('./_kit');
 const { reports, meta } = require('../utils/reports');
 const { types: masterTypes, flatten } = require('../utils/masters');
 const backup = require('../utils/backup');
-const { roleInArea, REPORT_GROUP_AREAS } = require('../utils/permissions');
+const { roleInArea, REPORT_GROUP_AREAS, actionFor } = require('../utils/permissions');
 
 // Reports and lists belong to a module group; staff roles get their level for that group's area.
 function roleForGroup(user, group) {
@@ -130,6 +130,10 @@ function masterType(req, res, mode) {
   // Lookup names feed dropdowns everywhere, so reading never needs more than teacher level.
   const role = roleForGroup(req.user, t.group) || (mode === 'read' ? 'teacher' : null);
   if (!allowed.includes(role)) { res.status(403).json({ error: 'Forbidden' }); return null; }
+  // A role's Add / Edit / Delete switches for the list's area apply to these lists too.
+  const area = REPORT_GROUP_AREAS[t.group];
+  const act = mode === 'write' ? actionFor(req.method, req.path) : null;
+  if (act && area && req.user.actions?.[area]?.[act] === false) { res.status(403).json({ error: `Your role can't ${act} in this list`, code: 'ACTION_DENIED' }); return null; }
   return t;
 }
 function splitMaster(t, body) {

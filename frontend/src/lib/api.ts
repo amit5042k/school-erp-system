@@ -1,4 +1,4 @@
-import { effectiveRoleFor } from './permissions';
+import { canDo, canDoInArea, effectiveRoleFor } from './permissions';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000/api';
 
@@ -84,7 +84,15 @@ export function fileUrl(u: string | null | undefined): string {
 }
 
 /** Download rows as a CSV file Excel can open (UTF-8 with BOM so ₹ and Hindi text survive). */
-export function downloadCsv(filename: string, columns: { key: string; label: string }[], rows: any[]) {
+export function downloadCsv(filename: string, columns: { key: string; label: string }[], rows: any[], area?: string | null) {
+  // A role with Export switched off for this screen's area can't download (the server refuses export routes too).
+  if (typeof window !== 'undefined') {
+    const u = getStoredUser<any>();
+    if (!(area !== undefined ? canDoInArea(u, area, 'export') : canDo(u, window.location.pathname, 'export'))) {
+      alert('Your role is not allowed to export or download in this area.');
+      return;
+    }
+  }
   const esc = (v: any) => {
     const s = v == null ? '' : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;

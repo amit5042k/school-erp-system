@@ -33,8 +33,12 @@ function authRequired(req, res, next) {
   if (staffRole) {
     req.user.role_key = staffRole.key;
     req.user.perms = staffRole.perms;
-    const eff = effectiveRole(staffRole.perms, req.method, path.replace(/^\/api(?=\/|$)/i, ''));
-    if (eff.deny) return res.status(403).json({ error: `Your role (${staffRole.name}) does not have access to ${eff.deny}`, code: 'AREA_DENIED' });
+    req.user.actions = staffRole.actions;
+    const eff = effectiveRole(staffRole.perms, req.method, path.replace(/^\/api(?=\/|$)/i, ''), staffRole.actions);
+    if (eff.deny) {
+      const what = eff.action ? `can't ${ {add: 'add', edit: 'edit', delete: 'delete', approve: 'approve or finalise', export: 'export or download'}[eff.action] } in` : 'does not have access to';
+      return res.status(403).json({ error: `Your role (${staffRole.name}) ${what} ${eff.deny}`, code: eff.action ? 'ACTION_DENIED' : 'AREA_DENIED' });
+    }
     req.user.role = eff.role;
   }
   next();

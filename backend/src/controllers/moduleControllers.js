@@ -587,7 +587,7 @@ const touchesSuperAdmin = (req, targetId) =>
 // than their own: otherwise an IT head could become a principal by making (or taking over) a principal login.
 const { exceedsPerms } = require('../utils/permissions');
 const roleBeyondMine = (req, roleKey) =>
-  (req.user.base_role !== 'admin' && roleKey ? exceedsPerms(staffRoles.get(roleKey)?.perms, req.user.perms) : null);
+  (req.user.base_role !== 'admin' && roleKey ? exceedsPerms(staffRoles.get(roleKey)?.perms, req.user.perms, staffRoles.get(roleKey)?.actions, req.user.actions) : null);
 const userBeyondMine = (req, targetId) => {
   const u = db.prepare('SELECT role, role_key FROM users WHERE id = ?').get(targetId);
   return u?.role === 'teacher' ? roleBeyondMine(req, u.role_key || 'teacher') : null;

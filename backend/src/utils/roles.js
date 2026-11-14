@@ -1,6 +1,6 @@
 // Storage for staff roles (see utils/permissions.js for what the levels mean).
 const db = require('../config/db');
-const { DEFAULT_ROLES, AREA_KEYS, normalizePerms } = require('./permissions');
+const { DEFAULT_ROLES, AREA_KEYS, normalizePerms, normalizeActions } = require('./permissions');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS staff_roles (
@@ -11,6 +11,8 @@ db.exec(`
     sort_order INTEGER NOT NULL DEFAULT 0
   );
 `);
+// Action switches per area (utils/permissions.js ACTIONS); NULL means everything on.
+try { db.exec('ALTER TABLE staff_roles ADD COLUMN actions TEXT'); } catch (e) { if (!/duplicate column/i.test(e.message)) throw e; }
 try { db.exec('ALTER TABLE users ADD COLUMN role_key TEXT'); } catch (e) { if (!/duplicate column/i.test(e.message)) throw e; }
 
 const ins = db.prepare('INSERT OR IGNORE INTO staff_roles (key, name, perms, builtin, sort_order) VALUES (?, ?, ?, 1, ?)');
@@ -31,7 +33,8 @@ let cache = null;
 function all() {
   if (!cache) {
     cache = new Map(db.prepare('SELECT * FROM staff_roles ORDER BY sort_order, name').all()
-      .map(r => [r.key, { key: r.key, name: r.name, builtin: !!r.builtin, sort_order: r.sort_order, perms: normalizePerms(JSON.parse(r.perms)) }]));
+      .map(r => [r.key, { key: r.key, name: r.name, builtin: !!r.builtin, sort_order: r.sort_order, perms: normalizePerms(JSON.parse(r.perms)),
+        actions: normalizeActions(r.actions ? JSON.parse(r.actions) : {}) }]));
   }
   return cache;
 }

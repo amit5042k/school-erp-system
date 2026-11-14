@@ -49,3 +49,22 @@ export function effectiveRoleFor(user: { role: string; baseRole?: string; perms?
 }
 
 export const canSeePage = (perms: Perms | null | undefined, pathname: string) => levelFor(perms, pathname) !== 'none';
+
+// Report group (as shown in Reports) → area, mirroring REPORT_GROUP_AREAS on the server.
+export const REPORT_GROUP_AREAS: Record<string, string> = {
+  Student: 'students', Students: 'students', Attendance: 'attendance', Examination: 'academics',
+  'Academic Communication': 'academic-comm', Communication: 'communication', Finance: 'finance', Accounts: 'accounts',
+  Payroll: 'payroll', 'Human Resource': 'hr', Library: 'library', Transport: 'transport', Hostel: 'hostel',
+  Inventory: 'inventory', 'Front Office': 'front-office', Biometric: 'administration',
+};
+
+export type Action = 'add' | 'edit' | 'delete' | 'approve' | 'export';
+type ActUser = { role: string; baseRole?: string; perms?: Perms | null; actions?: Record<string, Partial<Record<Action, boolean>>> | null };
+
+/** Whether a staff role may do this kind of action in an area (the server enforces it; screens use this to hide buttons). */
+export function canDoInArea(user: ActUser | null | undefined, area: string | null, action: Action): boolean {
+  if (!user || (user.baseRole || user.role) !== 'teacher' || !user.perms || !area) return true;
+  if ((user.perms[area] || 'none') === 'none') return false;
+  return user.actions?.[area]?.[action] !== false;
+}
+export const canDo = (user: ActUser | null | undefined, pathname: string, action: Action) => canDoInArea(user, areaForPage(pathname), action);

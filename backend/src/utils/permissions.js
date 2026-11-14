@@ -32,6 +32,40 @@ const AREAS = [
 const AREA_KEYS = AREAS.map(a => a.key);
 const LEVELS = ['none', 'standard', 'full'];
 
+/**
+ * Fine-grained switches inside each area a role can open. The level still decides scope (Standard = a teacher's
+ * view of the area, Full = the office's); these switch individual kinds of action off. Viewing is implied by any
+ * level above none. Everything is on unless switched off, so roles saved before these existed keep their access.
+ */
+const ACTIONS = [
+  { key: 'add', label: 'Add', hint: 'Create new records (admissions, receipts, vouchers, notices…)' },
+  { key: 'edit', label: 'Edit', hint: 'Change existing records' },
+  { key: 'delete', label: 'Delete', hint: 'Remove records' },
+  { key: 'approve', label: 'Approve', hint: 'Decide and finalise: approve/reject leave, publish results, cancel receipts, clear or bounce cheques, mark salaries paid' },
+  { key: 'export', label: 'Export', hint: 'Download Excel, print reports, Tally export, templates and backups' },
+];
+const ACTION_KEYS = ACTIONS.map(a => a.key);
+// Requests that decide or finalise something, whatever their HTTP method.
+const APPROVE_RE = /\/(decision|decide|approve|reject|publish|release|cancel|clear|bounce|mark-paid|action|reconciliation|app-blocks)(\/|$)/;
+// Downloads.
+const EXPORT_RE = /\/(tally|template|download|export)(\/|$)|\/errors\/|\.(xml|xlsx|csv)$/;
+
+/** The kind of action a request is: null for viewing, else one of ACTION_KEYS. */
+function actionFor(method, path) {
+  const p = normPath(path);
+  if (method === 'GET' || method === 'HEAD') return EXPORT_RE.test(p) ? 'export' : null;
+  if (APPROVE_RE.test(p)) return 'approve';
+  if (method === 'POST') return 'add';
+  if (method === 'DELETE') return 'delete';
+  return 'edit';
+}
+
+function normalizeActions(actions) {
+  const out = {};
+  for (const k of AREA_KEYS) out[k] = Object.fromEntries(ACTION_KEYS.map(a => [a, actions?.[k]?.[a] !== false]));
+  return out;
+}
+
 // API path prefix → area. First match wins, so more specific prefixes come first.
 const API_AREAS = [
   ['/imports/students', 'students'], ['/imports/parents', 'students'], ['/imports/student-logins', 'students'],
@@ -133,13 +167,19 @@ const roleFor = (level) => (level === 'full' ? 'admin' : 'teacher');
  * Effective role for one request by a staff member with role permissions.
  * Returns { role } or { deny: areaLabel } when the role has no access to that area.
  */
-function effectiveRole(perms, method, path) {
+function effectiveRole(perms, method, path, actions) {
   const area = areaForPath(path);
   if (!area) return { role: 'teacher' };
   const level = perms[area] || 'none';
-  if (level !== 'none') return { role: roleFor(level) };
-  if (isSelfService(method, path)) return { role: 'teacher' };
-  return { deny: AREAS.find(a => a.key === area)?.label || area };
+  const label = AREAS.find(a => a.key === area)?.label || area;
+  // Own records (own leave, payslips, timing…) stay open whatever the role's switches say. That holds at teacher
+  // scope, where the server limits these routes to the person's own records; at Full the same routes reach
+  // everyone's, so the switches apply there.
+  if (isSelfService(method, path) && level !== 'full') return { role: 'teacher' };
+  if (level === 'none') return { deny: label };
+  const act = actionFor(method, path);
+  if (act && actions?.[area]?.[act] === false) return { deny: label, action: act };
+  return { role: roleFor(level) };
 }
 
 // Effective role inside an area (used where the URL alone doesn't say, e.g. reports).
@@ -153,10 +193,19 @@ function roleInArea(perms, area) {
  * Label of the first area where `perms` grants more than `mine`, or null when it grants nothing more.
  * Staff who manage users and roles may only hand out (or take over) access they have themselves.
  */
-function exceedsPerms(perms, mine) {
+function exceedsPerms(perms, mine, actions, myActions) {
   const rank = (l) => LEVELS.indexOf(l || 'none');
   const area = AREAS.find(a => rank(perms?.[a.key]) > rank(mine?.[a.key]));
-  return area ? area.label : null;
+  if (area) return area.label;
+  // Nor an action switched off for themselves (when both sides' switches are known).
+  if (actions && myActions) {
+    for (const a of AREAS) {
+      if ((perms?.[a.key] || 'none') === 'none') continue;
+      const act = ACTIONS.find(x => actions[a.key]?.[x.key] !== false && myActions[a.key]?.[x.key] === false);
+      if (act) return `${a.label}: ${act.label}`;
+    }
+  }
+  return null;
 }
 
 function normalizePerms(perms) {
@@ -168,4 +217,5 @@ function normalizePerms(perms) {
 module.exports = {
   AREAS, AREA_KEYS, LEVELS, DEFAULT_ROLES, REPORT_GROUP_AREAS,
   areaForPath, isSelfService, effectiveRole, roleInArea, normalizePerms, normPath, exceedsPerms,
+  ACTIONS, ACTION_KEYS, actionFor, normalizeActions,
 };
