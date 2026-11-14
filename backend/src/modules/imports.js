@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { db, ROLES, auth, role, safe, today, isDate, num, currentSession, registerReport } = require('./_kit');
-const { ensureStaffLogin } = require('../utils/staffLogin');
+const { ensureStaffLogin, afterStaffEdit, officialEmailOf } = require('../utils/staffLogin');
 const fees = require('../controllers/feesController');
 const { linkChild } = require('./family');
 
@@ -446,8 +446,10 @@ const APPLY = {
     upsert('students', STUDENT_COLS, v.data, v.action === 'update' ? v.id : null, m);
   },
   staff(v, mapped, out) {
+    const before = v.action === 'update' ? officialEmailOf(v.id) : null;
     const id = upsert('teachers', STAFF_COLS, v.data, v.action === 'update' ? v.id : null, mapped) || v.id;
-    const r = id ? ensureStaffLogin(id) : null;
+    // New staff get a login; for existing staff only a new or changed official email does.
+    const r = !id ? null : v.action === 'update' ? afterStaffEdit(id, before) : ensureStaffLogin(id);
     if (r?.created) out.credentials.push({ username: r.created.username, password: r.created.password, name: r.created.name, role: 'staff' });
   },
   opening(v) {

@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { ensureStaffLogin } = require('../utils/staffLogin');
+const { ensureStaffLogin, afterStaffEdit, officialEmailOf } = require('../utils/staffLogin');
 const { dbError, badUrl } = require('../utils/http');
 
 const FIELDS = ['employee_no', 'full_name', 'subject', 'qualification', 'phone', 'email', 'official_email', 'department', 'photo_url'];
@@ -43,9 +43,10 @@ exports.update = (req, res) => {
   if (badUrl(req.body.photo_url)) return res.status(400).json({ error: badUrl(req.body.photo_url, 'photo_url') });
   values.push(req.params.id);
   try {
+    const before = officialEmailOf(Number(req.params.id));
     const info = db.prepare(`UPDATE teachers SET ${sets.join(', ')} WHERE id = ?`).run(...values);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
-    res.json({ ok: true, login: ensureStaffLogin(Number(req.params.id)) });
+    res.json({ ok: true, login: afterStaffEdit(Number(req.params.id), before) });
   } catch (e) { dbError(res, e); }
 };
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { api, getToken } from '@/lib/api';
 
 // Only active inside the Android and iOS apps (Capacitor injects window.Capacitor); a no-op on the website.
@@ -113,8 +113,31 @@ export default function NativeBridge() {
     window.open = ((u?: string | URL) => { if (u) openOutside(new URL(String(u), window.location.href).href); return null; }) as typeof window.open;
     cleanups.push(() => { window.open = originalOpen; });
 
-    // Push notifications.
-    if (PushNotifications && pushEnabled() && getToken()) {
+    return () => cleanups.forEach(fn => fn());
+  }, [router]);
+
+
+  // Push notifications: register once someone is signed in (the bridge loads on the sign-in screen, before that),
+  // and again after a different person signs in on the same phone.
+  const pathname = usePathname();
+  const registeredFor = useRef<string | null>(null);
+  // Listeners live for the whole sign-in (not just one page); replaced when someone else signs in.
+  const pushListeners = useRef<(() => void)[]>([]);
+  useEffect(() => {
+    const c = cap();
+    const token = getToken();
+    if (!c || !token || registeredFor.current === token) return;
+    registeredFor.current = token;
+    pushListeners.current.forEach(fn => fn());
+    pushListeners.current = [];
+    const { PushNotifications } = c.Plugins;
+    const cleanups = pushListeners.current;
+    const listen = async (plugin: any, event: string, fn: (e: any) => void) => {
+      if (!plugin?.addListener) return;
+      const h = await plugin.addListener(event, fn);
+      cleanups.push(() => h?.remove?.());
+    };
+    if (PushNotifications && pushEnabled()) {
       (async () => {
         try {
           if (c.getPlatform?.() === 'android') await PushNotifications.createChannel?.({
@@ -141,8 +164,7 @@ export default function NativeBridge() {
       })();
     }
 
-    return () => cleanups.forEach(fn => fn());
-  }, [router]);
+  }, [pathname, router]);
 
   return null;
 }

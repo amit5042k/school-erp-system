@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { ensureStaffLogin } = require('../utils/staffLogin');
+const { ensureStaffLogin, afterStaffEdit, officialEmailOf } = require('../utils/staffLogin');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const {
@@ -231,10 +231,11 @@ const employees = {
     const problem = empProblem(d, false);
     if (problem) return err400(res, problem);
     const cols = Object.keys(d);
+    const before = officialEmailOf(Number(req.params.id));
     const info = db.prepare(`UPDATE teachers SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`).run(...cols.map(c => d[c]), req.params.id);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
     const loginsDisabled = disableLoginIfLeft(Number(req.params.id), d.status);
-    res.json({ ok: true, logins_disabled: loginsDisabled, login: loginsDisabled ? null : ensureStaffLogin(Number(req.params.id)) });
+    res.json({ ok: true, logins_disabled: loginsDisabled, login: loginsDisabled ? null : afterStaffEdit(Number(req.params.id), before) });
   },
   quickUpdate(req, res) {
     const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
@@ -660,7 +661,7 @@ async function sendPhotoLinks(req, res, next) {
     if (channel !== 'screen' && !messaging.status()[channel]) {
       return err400(res, `${channel.toUpperCase()} is not configured on the server. Choose "Show on screen" to copy the links instead.`);
     }
-    const staff = db.prepare(`SELECT id, full_name, phone, email FROM teachers WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+    const staff = db.prepare(`SELECT id, full_name, phone, COALESCE(NULLIF(official_email, ''), email) AS email FROM teachers WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
     const expires = new Date(Date.now() + 7 * 86400000).toISOString();
     const school = db.prepare('SELECT school_name FROM school_settings WHERE id = 1').get()?.school_name || 'School';
     const out = { sent: 0, failed: 0, skipped: 0, links: [] };

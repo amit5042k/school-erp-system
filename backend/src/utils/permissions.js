@@ -55,6 +55,7 @@ function actionFor(method, path) {
   const p = normPath(path);
   if (method === 'GET' || method === 'HEAD') return EXPORT_RE.test(p) ? 'export' : null;
   if (APPROVE_RE.test(p)) return 'approve';
+  if (method === 'POST' && /\/(delete|remove)(\/|$)/.test(p)) return 'delete';   // bulk deletes sent as POST
   if (method === 'POST') return 'add';
   if (method === 'DELETE') return 'delete';
   return 'edit';

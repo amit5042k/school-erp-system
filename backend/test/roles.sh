@@ -151,6 +151,13 @@ check "IT head can't delete the principal's login" "$(code -X DELETE $B/users/$(
 check "old staff logins are listed (usernames that aren't emails)" "$(curl -s $B/users/old-staff-logins -H "$HA" | j "x.some(u=>u.username==='ritu') && !x.some(u=>u.username.includes('@'))")" true
 check "admin deletes a login" "$(code -X DELETE $B/users/$(uidof os$SFX@test.example) -H "$HA")" 200
 check "a deleted login is signed out at once" "$(code $B/auth/me -H "$(H $OS)")" 401
+OSTID=$(curl -s "$B/teachers" -H "$HA" | j "x.find(t=>t.employee_no==='E-os$SFX').id")
+curl -s -o /dev/null -X PUT $B/hr/employees/$OSTID -H "$HA" -H "$C" -d '{"phone":"9876500000"}'
+check "editing the staff record doesn't bring a deleted login back" "$(uidof os$SFX@test.example)" undefined
+check "a new official email does create a login again" "$(curl -s -X PUT $B/hr/employees/$OSTID -H "$HA" -H "$C" -d "{\"official_email\":\"os2$SFX@test.example\"}" | j 'x.login.created.username')" "os2$SFX@test.example"
+curl -s -X PUT $B/roles/it-head -H "$HA" -H "$C" -d '{"actions":{"administration":{"delete":false}}}' >/dev/null
+check "Delete off blocks the bulk delete (sent as POST)" "$(code -X POST $B/users/old-staff-logins/delete -H "$(H $IT)")" 403
+curl -s -X PUT $B/roles/it-head -H "$HA" -H "$C" -d '{"actions":{"administration":{"delete":true}}}' >/dev/null
 check "bulk-deleting old staff logins" "$(curl -s -X POST $B/users/old-staff-logins/delete -H "$HA" | j "x.deleted.includes('ritu')")" true
 check "none left afterwards" "$(curl -s $B/users/old-staff-logins -H "$HA" | j 'x.length')" 0
 echo "$pass passed, $fail failed"

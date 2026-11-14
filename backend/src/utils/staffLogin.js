@@ -43,4 +43,15 @@ function ensureStaffLogin(teacherId) {
   return { created: { username, password, role_key: roleKey, name: t.full_name } };
 }
 
-module.exports = { ensureStaffLogin, usernameFor, isEmail };
+/**
+ * After a staff record is edited: create or rename the login only when the official email was added or changed.
+ * Other edits leave logins alone, so a login an admin deleted (to revoke access) isn't quietly re-created.
+ */
+function afterStaffEdit(teacherId, previousOfficialEmail) {
+  const now = db.prepare('SELECT official_email FROM teachers WHERE id = ?').get(teacherId)?.official_email;
+  if (usernameFor(now) === usernameFor(previousOfficialEmail)) return null;
+  return ensureStaffLogin(teacherId);
+}
+const officialEmailOf = (teacherId) => db.prepare('SELECT official_email FROM teachers WHERE id = ?').get(teacherId)?.official_email || null;
+
+module.exports = { ensureStaffLogin, afterStaffEdit, officialEmailOf, usernameFor, isEmail };

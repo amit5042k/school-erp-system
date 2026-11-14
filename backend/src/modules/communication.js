@@ -63,7 +63,8 @@ function viewerStudent(user) {
 const STUDENT_COLS = `s.id, s.full_name AS name, s.contact AS phone, s.email, s.admission_no,
   c.name || ' ' || c.section AS detail`;
 const STUDENT_FROM = `FROM students s LEFT JOIN classes c ON c.id = s.class_id WHERE COALESCE(s.status, 'active') = 'active'`;
-const STAFF_COLS = `t.id, t.full_name AS name, t.phone, t.email, t.employee_no, COALESCE(t.designation, t.subject) AS detail`;
+// School messages go to the official (school) address; the personal one only when there isn't one.
+const STAFF_COLS = `t.id, t.full_name AS name, t.phone, COALESCE(NULLIF(t.official_email, ''), t.email) AS email, t.employee_no, COALESCE(t.designation, t.subject) AS detail`;
 const STAFF_FROM = `FROM teachers t WHERE COALESCE(t.status, 'active') = 'active'`;
 
 const TARGETS = {
