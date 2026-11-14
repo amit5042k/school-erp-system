@@ -16,8 +16,9 @@ type Teacher = {
 const EMPTY: Record<string, string> = {
   employee_no: '', full_name: '', gender: '', dob: '', blood_group: '', aadhaar_no: '',
   designation: '', department: '', staff_category: '', subject: '', qualification: '', joining_date: '', status: 'active',
-  phone: '', email: '', address: '', bank_name: '', bank_account: '', ifsc: '', pan_no: '', uan_no: '', esi_no: '', photo_url: '',
+  phone: '', email: '', official_email: '', address: '', bank_name: '', bank_account: '', ifsc: '', pan_no: '', uan_no: '', esi_no: '', photo_url: '',
 };
+type LoginResult = { name?: string; created?: { username: string; password: string; role_key: string }; renamed?: string; skipped?: string; exists?: string };
 const BLOOD = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 export default function TeachersPage() {
@@ -29,6 +30,8 @@ export default function TeachersPage() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [form, setForm] = useState<Record<string, string>>(EMPTY);
   const { msg, flash } = useFlash();
+  // The login made (or renamed) when an employee is saved: shown once so the office can hand over the password.
+  const [login, setLogin] = useState<LoginResult | null>(null);
   const isAdmin = getUser<any>()?.role === 'admin';
   const designations = useMasterNames('designations');
   const departments = useMasterNames('departments');
@@ -51,10 +54,12 @@ export default function TeachersPage() {
     setError(null);
     try {
       if (editing === 'new') {
-        await api('/hr/employees', { method: 'POST', body: JSON.stringify(form) });
+        const r = await api<{ login?: LoginResult }>('/hr/employees', { method: 'POST', body: JSON.stringify(form) });
+        setLogin(r.login ? { ...r.login, name: form.full_name } : null);
         flash(`${form.full_name} added.`);
       } else {
-        const r = await api<{ logins_disabled: number }>(`/hr/employees/${editing}`, { method: 'PUT', body: JSON.stringify(form) });
+        const r = await api<{ logins_disabled: number; login?: LoginResult }>(`/hr/employees/${editing}`, { method: 'PUT', body: JSON.stringify(form) });
+        setLogin(r.login && (r.login.created || r.login.renamed) ? { ...r.login, name: form.full_name } : null);
         flash(r.logins_disabled ? `Saved. Their login has been disabled because they have left.` : 'Employee saved.');
       }
       setEditing(null); load();
@@ -143,6 +148,19 @@ export default function TeachersPage() {
       />
 
       <div className="mt-4"><Flash msg={msg} /></div>
+      {login && (login.created ? (
+        <div className="card p-3 mt-3 text-sm border-green-200 bg-green-50 max-w-xl">
+          <div className="font-semibold text-green-800 mb-1">Login created for {login.name}</div>
+          <div>Username: <span className="font-mono">{login.created.username}</span></div>
+          <div>Temporary password: <span className="font-mono">{login.created.password}</span></div>
+          <div className="text-xs text-gray-600 mt-1">Shown only once. They must choose a new password at first sign-in. Role: {login.created.role_key === 'teacher' ? 'Teacher' : 'Non-Teaching Staff'} (change it in Users &amp; Roles).</div>
+          <button className="text-xs text-brand-600 underline mt-1" onClick={() => setLogin(null)}>Done</button>
+        </div>
+      ) : login.renamed ? (
+        <div className="card p-3 mt-3 text-sm bg-brand-50 max-w-xl">Their login username is now <span className="font-mono">{login.renamed}</span> (the new official email). <button className="text-xs underline ml-2" onClick={() => setLogin(null)}>OK</button></div>
+      ) : login.skipped ? (
+        <div className="card p-3 mt-3 text-sm bg-amber-50 border-amber-200 max-w-xl">No login yet for {login.name}: {login.skipped}. <button className="text-xs underline ml-2" onClick={() => setLogin(null)}>OK</button></div>
+      ) : null)}
       {error && <div className="text-red-700 text-sm mt-4">{error}</div>}
 
       {editing !== null && (
@@ -195,7 +213,12 @@ export default function TeachersPage() {
               <div className="text-xs font-semibold uppercase text-gray-500 mb-2">Contact</div>
               <div className="grid md:grid-cols-3 gap-3">
                 {text('phone', 'Phone', { inputMode: 'tel' })}
-                {text('email', 'Email', { type: 'email' })}
+                <div>
+                  <label className="label">Official Email</label>
+                  <input className="input" type="email" value={form.official_email} onChange={set('official_email')} placeholder="name@yourschool.in" />
+                  <div className="text-[11px] text-gray-500 mt-1">School-issued address. It becomes their login username; leave blank to add them without a login for now.</div>
+                </div>
+                {text('email', 'Personal Email', { type: 'email' })}
                 <div className="md:col-span-1"><label className="label">Address</label><textarea className="input" rows={1} value={form.address} onChange={set('address')} /></div>
               </div>
             </div>

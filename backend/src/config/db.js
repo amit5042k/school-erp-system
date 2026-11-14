@@ -523,6 +523,7 @@ function init() {
     'joining_date TEXT', 'designation TEXT', 'staff_category TEXT', 'gender TEXT', 'dob TEXT', 'address TEXT',
     'bank_name TEXT', 'bank_account TEXT', 'ifsc TEXT', 'pan_no TEXT', 'uan_no TEXT', 'esi_no TEXT',
     'blood_group TEXT', 'aadhaar_no TEXT',
+    'official_email TEXT',   // school-issued address; becomes the staff login's username (email = personal)
   ]) tryAlter(`ALTER TABLE teachers ADD COLUMN ${col}`);
 
   db.exec(`

@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { ensureStaffLogin } = require('../utils/staffLogin');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const {
@@ -170,7 +171,7 @@ function statusFromPunches(firstIn, lastOut, r) {
 }
 
 /* ---------- Employees ---------- */
-const EMP_FIELDS = ['employee_no', 'full_name', 'subject', 'qualification', 'phone', 'email', 'department', 'photo_url',
+const EMP_FIELDS = ['employee_no', 'full_name', 'subject', 'qualification', 'phone', 'email', 'official_email', 'department', 'photo_url',
   'designation', 'staff_category', 'status', 'joining_date', 'gender', 'dob', 'address', 'bank_name', 'bank_account',
   'ifsc', 'pan_no', 'uan_no', 'esi_no', 'blood_group', 'aadhaar_no'];
 const QUICK_FIELDS = ['designation', 'department', 'staff_category', 'status', 'phone', 'email', 'subject'];
@@ -179,7 +180,8 @@ function empProblem(d, creating) {
   if (creating || 'employee_no' in d) if (!String(d.employee_no || '').trim()) return 'Employee No is required';
   if (creating || 'full_name' in d) if (!String(d.full_name || '').trim()) return 'Full Name is required';
   if (d.status && !STAFF_STATUS.includes(d.status)) return `status must be one of ${STAFF_STATUS.join(', ')}`;
-  if (d.email && !isEmail(d.email)) return 'Email is not valid';
+  if (d.email && !isEmail(d.email)) return 'Personal email is not valid';
+  if (d.official_email && !isEmail(d.official_email)) return 'Official email is not valid';
   if (d.phone && !/^\+?[\d\s-]{7,15}$/.test(d.phone)) return 'Phone number is not valid';
   for (const f of ['joining_date', 'dob']) if (d[f] && !isDate(d[f])) return `${f} must be YYYY-MM-DD`;
   if (d.dob && d.dob > today()) return 'Date of birth cannot be in the future';
@@ -220,7 +222,8 @@ const employees = {
     if (!d.status) d.status = 'active';
     const cols = Object.keys(d);
     const info = db.prepare(`INSERT INTO teachers (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...cols.map(c => d[c]));
-    res.status(201).json({ id: info.lastInsertRowid });
+    // Their login is created straight away, named after their official email.
+    res.status(201).json({ id: info.lastInsertRowid, login: ensureStaffLogin(info.lastInsertRowid) });
   },
   update(req, res) {
     const d = pickEmp(req.body);
@@ -230,7 +233,8 @@ const employees = {
     const cols = Object.keys(d);
     const info = db.prepare(`UPDATE teachers SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`).run(...cols.map(c => d[c]), req.params.id);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
-    res.json({ ok: true, logins_disabled: disableLoginIfLeft(Number(req.params.id), d.status) });
+    const loginsDisabled = disableLoginIfLeft(Number(req.params.id), d.status);
+    res.json({ ok: true, logins_disabled: loginsDisabled, login: loginsDisabled ? null : ensureStaffLogin(Number(req.params.id)) });
   },
   quickUpdate(req, res) {
     const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;

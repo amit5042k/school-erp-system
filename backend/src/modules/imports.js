@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { db, ROLES, auth, role, safe, today, isDate, num, currentSession, registerReport } = require('./_kit');
+const { ensureStaffLogin } = require('../utils/staffLogin');
 const fees = require('../controllers/feesController');
 const { linkChild } = require('./family');
 
@@ -80,7 +81,8 @@ const TYPES = {
       col('dob', 'Date of Birth', { kind: 'date', example: '20/08/1988', aliases: ['dob', 'birth date'] }),
       col('joining_date', 'Joining Date', { kind: 'date', example: '01/07/2020', aliases: ['date of joining', 'doj'] }),
       col('phone', 'Phone', { kind: 'phone', example: '9810012345', aliases: ['mobile', 'contact', 'contact no', 'mobile no'] }),
-      col('email', 'Email', { kind: 'email', example: 'anita@school.example' }),
+      col('official_email', 'Official Email', { kind: 'email', example: 'anita.sharma@school.example', aliases: ['school email', 'work email'] }),
+      col('email', 'Personal Email', { kind: 'email', example: 'anita88@gmail.com', aliases: ['email'] }),
       col('qualification', 'Qualification', { example: 'M.Sc, B.Ed' }),
       col('subject', 'Subject', { example: 'Science' }),
       col('address', 'Address', { example: 'Model Town, Jalandhar' }),
@@ -424,7 +426,7 @@ const VALIDATORS = {
 const tempPassword = () => crypto.randomBytes(6).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).padEnd(8, '7');
 const STUDENT_COLS = ['admission_no', 'full_name', 'gender', 'dob', 'class_id', 'roll_no', 'father_name', 'mother_name', 'contact', 'email',
   'address', 'admission_date', 'session', 'category', 'religion', 'blood_group', 'house', 'aadhaar_no'];
-const STAFF_COLS = ['employee_no', 'full_name', 'designation', 'department', 'staff_category', 'gender', 'dob', 'joining_date', 'phone', 'email',
+const STAFF_COLS = ['employee_no', 'full_name', 'designation', 'department', 'staff_category', 'gender', 'dob', 'joining_date', 'phone', 'email', 'official_email',
   'qualification', 'subject', 'address', 'bank_name', 'bank_account', 'ifsc', 'pan_no', 'uan_no', 'esi_no', 'blood_group', 'aadhaar_no', 'biometric_id'];
 
 function upsert(table, cols, d, id, mapped) {
@@ -443,8 +445,10 @@ const APPLY = {
     const m = new Set([...mapped, ...(mapped.has('class') ? ['class_id'] : [])]);
     upsert('students', STUDENT_COLS, v.data, v.action === 'update' ? v.id : null, m);
   },
-  staff(v, mapped) {
-    upsert('teachers', STAFF_COLS, v.data, v.action === 'update' ? v.id : null, mapped);
+  staff(v, mapped, out) {
+    const id = upsert('teachers', STAFF_COLS, v.data, v.action === 'update' ? v.id : null, mapped) || v.id;
+    const r = id ? ensureStaffLogin(id) : null;
+    if (r?.created) out.credentials.push({ username: r.created.username, password: r.created.password, name: r.created.name, role: 'staff' });
   },
   opening(v) {
     const d = v.data;

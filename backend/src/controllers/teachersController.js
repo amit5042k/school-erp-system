@@ -1,16 +1,28 @@
 const db = require('../config/db');
+const { ensureStaffLogin } = require('../utils/staffLogin');
 const { dbError, badUrl } = require('../utils/http');
 
-const FIELDS = ['employee_no', 'full_name', 'subject', 'qualification', 'phone', 'email', 'department', 'photo_url'];
+const FIELDS = ['employee_no', 'full_name', 'subject', 'qualification', 'phone', 'email', 'official_email', 'department', 'photo_url'];
+
+// Everyone signed in can look staff up (dropdowns, timetables, class teachers), but personal details such as bank
+// account, PAN, Aadhaar, address, birth date and personal email are only for admins (and the person themselves).
+const DIRECTORY = ['id', 'employee_no', 'full_name', 'subject', 'qualification', 'department', 'designation', 'staff_category',
+  'official_email', 'photo_url', 'status'];
+const STAFF_EXTRA = ['phone', 'joining_date', 'gender'];   // colleagues may see these; students and parents may not
+function visible(req, row) {
+  if (!row || req.user.role === 'admin' || (req.user.role === 'teacher' && row.id === req.user.linked_id)) return row;
+  const keys = req.user.role === 'teacher' ? [...DIRECTORY, ...STAFF_EXTRA] : DIRECTORY;
+  return Object.fromEntries(keys.filter(k => k in row).map(k => [k, row[k]]));
+}
 
 exports.list = (req, res) => {
-  res.json(db.prepare('SELECT * FROM teachers ORDER BY full_name').all());
+  res.json(db.prepare('SELECT * FROM teachers ORDER BY full_name').all().map(r => visible(req, r)));
 };
 
 exports.get = (req, res) => {
   const row = db.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
-  res.json(row);
+  res.json(visible(req, row));
 };
 
 exports.create = (req, res) => {
@@ -20,7 +32,7 @@ exports.create = (req, res) => {
   try {
     const info = db.prepare(`INSERT INTO teachers (${FIELDS.join(', ')}) VALUES (${FIELDS.map(() => '?').join(', ')})`)
       .run(...FIELDS.map(f => req.body[f] || null));
-    res.status(201).json({ id: info.lastInsertRowid });
+    res.status(201).json({ id: info.lastInsertRowid, login: ensureStaffLogin(info.lastInsertRowid) });
   } catch (e) { dbError(res, e); }
 };
 
@@ -33,7 +45,7 @@ exports.update = (req, res) => {
   try {
     const info = db.prepare(`UPDATE teachers SET ${sets.join(', ')} WHERE id = ?`).run(...values);
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
-    res.json({ ok: true });
+    res.json({ ok: true, login: ensureStaffLogin(Number(req.params.id)) });
   } catch (e) { dbError(res, e); }
 };
 

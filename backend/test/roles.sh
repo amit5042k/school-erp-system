@@ -7,18 +7,22 @@ code(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
 check(){ if [ "$2" = "$3" ]; then pass=$((pass+1)); else echo "FAIL  $1  (expected $3, got $2)"; fail=$((fail+1)); fi; }
 tok(){ curl -s -X POST $B/auth/login -H "$C" -d "{\"username\":\"$1\",\"password\":\"$2\"}" | j 'x.token'; }
 A=$(tok admin admin123); HA="Authorization: Bearer $A"
-mk(){ # username role_key teacher_id → token after first-login password change
-  curl -s -X POST $B/users -H "$HA" -H "$C" -d "{\"username\":\"$1\",\"password\":\"start123\",\"role\":\"teacher\",\"role_key\":\"$2\",\"full_name\":\"$1\",\"linked_id\":$3}" >/dev/null
-  local t=$(tok $1 start123)
-  curl -s -X POST $B/auth/change-password -H "Authorization: Bearer $t" -H "$C" -d '{"current_password":"start123","new_password":"pass4567"}' >/dev/null
-  tok $1 pass4567
+mk(){ # name role_key → token. Saving the employee creates their login (username = official email); then set the role.
+  local r=$(curl -s -X POST $B/hr/employees -H "$HA" -H "$C" -d "{\"employee_no\":\"E-$1\",\"full_name\":\"$1\",\"official_email\":\"$1@test.example\",\"department\":\"ADMIN\"}")
+  local pw=$(echo "$r" | j 'x.login.created.password')
+  local uid=$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='$1@test.example').id")
+  curl -s -X POST $B/users/$uid/role -H "$HA" -H "$C" -d "{\"role_key\":\"$2\"}" >/dev/null
+  local t=$(tok $1@test.example $pw)
+  curl -s -X POST $B/auth/change-password -H "Authorization: Bearer $t" -H "$C" -d "{\"current_password\":\"$pw\",\"new_password\":\"pass4567\"}" >/dev/null
+  tok $1@test.example pass4567
 }
+tid(){ curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='$1@test.example').linked_id"; }
 SFX=$RANDOM
-P=$(mk pr$SFX principal 3); AC=$(mk ac$SFX accountant 4); CL=$(mk cl$SFX clerk 5); IT=$(mk it$SFX it-head 2); ST=$(mk st$SFX staff 1); CO=$(mk co$SFX academic-coordinator 2); OS=$(mk os$SFX office-superintendent 4)
+P=$(mk pr$SFX principal); AC=$(mk ac$SFX accountant); CL=$(mk cl$SFX clerk); IT=$(mk it$SFX it-head); ST=$(mk st$SFX staff); CO=$(mk co$SFX academic-coordinator); OS=$(mk os$SFX office-superintendent)
 H(){ echo "Authorization: Bearer $1"; }
 
-check "login returns role info" "$(curl -s -X POST $B/auth/login -H "$C" -d "{\"username\":\"ac$SFX\",\"password\":\"pass4567\"}" | j 'x.user.roleKey+"|"+x.user.roleName+"|"+x.user.perms.finance')" "accountant|Accountant|full"
-check "staff picks 'Administration' on login form" "$(code -X POST $B/auth/login -H "$C" -d "{\"username\":\"pr$SFX\",\"password\":\"pass4567\",\"role\":\"admin\"}")" 200
+check "login returns role info" "$(curl -s -X POST $B/auth/login -H "$C" -d "{\"username\":\"ac$SFX@test.example\",\"password\":\"pass4567\"}" | j 'x.user.roleKey+"|"+x.user.roleName+"|"+x.user.perms.finance')" "accountant|Accountant|full"
+check "staff picks 'Administration' on login form" "$(code -X POST $B/auth/login -H "$C" -d "{\"username\":\"pr$SFX@test.example\",\"password\":\"pass4567\",\"role\":\"admin\"}")" 200
 check "student can't log in as staff" "$(code -X POST $B/auth/login -H "$C" -d '{"username":"ADM2025001","password":"student123","role":"admin"}')" 401
 
 # Accountant
@@ -39,7 +43,7 @@ check "clerk can't edit fee heads" "$(code -X POST $B/masters/fee-heads -H "$(H 
 check "clerk sees own payslips (self-service)" "$(code $B/pay/my-slips -H "$(H $CL)")" 200
 CLL=$(curl -s -X POST $B/leaves -H "$(H $CL)" -H "$C" -d '{"leave_type":"Casual Leave","from_date":"2026-11-10","to_date":"2026-11-10"}' | j 'x.id')
 check "clerk applies for own leave" "$([ "$CLL" -gt 0 ] 2>/dev/null && echo ok)" ok
-check "clerk's leave list is only their own" "$(curl -s $B/leaves -H "$(H $CL)" | j 'x.every(l=>l.teacher_id===5)')" true
+check "clerk's leave list is only their own" "$(curl -s $B/leaves -H "$(H $CL)" | j "x.every(l=>l.teacher_id===$(tid cl$SFX))")" true
 check "clerk can't approve leaves (hr none)" "$(code -X POST $B/leaves/1/decision -H "$(H $CL)" -H "$C" -d '{"action":"approve"}')" 403
 check "clerk doesn't see finance reports" "$(curl -s $B/report-catalog -H "$(H $CL)" | j 'x.some(r=>r.group==="Finance")')" false
 # Non-teaching staff
@@ -74,13 +78,14 @@ check "accountant opens accounts" "$(code $B/accounts/summary -H "$(H $AC)")" 20
 check "clerk blocked from accounts" "$(code $B/accounts/summary -H "$(H $CL)")" 403
 check "teacher blocked from accounts" "$(code $B/accounts/vouchers -H "$(H $CO)")" 403
 # User managers below Super Admin can't hand out or take over more access than they have (IT head has no Finance).
-PRID=$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='pr$SFX').id")
+PRID=$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='pr$SFX@test.example').id")
 check "IT head can't create a principal login" "$(code -X POST $B/users -H "$(H $IT)" -H "$C" -d "{\"username\":\"xp$SFX\",\"password\":\"start123\",\"role\":\"teacher\",\"role_key\":\"principal\",\"full_name\":\"x\",\"linked_id\":1}")" 403
 check "IT head can't reset the principal's password" "$(code -X POST $B/users/$PRID/reset-password -H "$(H $IT)" -H "$C" -d '{"password":"taken123"}')" 403
 check "IT head can't give a role Finance access" "$(code -X PUT $B/roles/teacher -H "$(H $IT)" -H "$C" -d '{"perms":{"finance":"full"}}')" 403
-check "IT head can still create a teacher login" "$(code -X POST $B/users -H "$(H $IT)" -H "$C" -d "{\"username\":\"xt$SFX\",\"password\":\"start123\",\"role\":\"teacher\",\"role_key\":\"teacher\",\"full_name\":\"x\",\"linked_id\":1}")" 201
+check "IT head can still give a login the Teacher role" "$(code -X POST $B/users/$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='st$SFX@test.example').id")/role -H "$(H $IT)" -H "$C" -d '{"role_key":"teacher"}')" 200
+curl -s -X POST $B/users/$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='st$SFX@test.example').id")/role -H "$HA" -H "$C" -d '{"role_key":"staff"}' >/dev/null
 # Nobody below Super Admin decides their own leave or sets their own salary.
-check "accountant can't change own salary structure" "$(code -X PUT $B/pay/structure/4 -H "$(H $AC)" -H "$C" -d '{"basic":99999}')" 403
+check "accountant can't change own salary structure" "$(code -X PUT $B/pay/structure/$(tid ac$SFX) -H "$(H $AC)" -H "$C" -d '{"basic":99999}')" 403
 check "principal sees own payslips" "$(code $B/pay/my-slips -H "$(H $P)")" 200
 # Every staff member sees their own in/out times (timing only), even with no HR access; nobody else's.
 check "non-teaching staff sees own in/out timing" "$(code $B/hr/my-timing -H "$(H $ST)")" 200
@@ -105,6 +110,21 @@ check "IT head can't create a role with an action they lack" "$(code -X POST $B/
 check "IT head can create it with that action off" "$(code -X POST $B/roles -H "$(H $IT)" -H "$C" -d '{"name":"Lib '$SFX'","perms":{"library":"standard"},"actions":{"library":{"export":false}}}')" 201
 curl -s -X PUT $B/roles/it-head -H "$HA" -H "$C" -d '{"actions":{"library":{"export":true}}}' >/dev/null
 for r in clerk office-superintendent accountant academic-coordinator; do curl -s -X PUT $B/roles/$r -H "$(H $P)" -H "$C" -d '{"actions":{"students":{"delete":true},"front-office":{"export":true},"hr":{"approve":true,"add":true},"accounts":{"export":true}}}' >/dev/null; done
+# Staff logins are created from the employee record, named after the official email.
+NE=$(curl -s -X POST $B/hr/employees -H "$HA" -H "$C" -d "{\"employee_no\":\"N$SFX\",\"full_name\":\"Neha Kapoor\",\"official_email\":\"Neha.K$SFX@School.example\",\"email\":\"neha.personal$SFX@gmail.example\",\"designation\":\"PGT Chemistry\"}")
+check "saving an employee creates their login named after their email" "$(echo "$NE" | j 'x.login.created.username')" "neha.k$SFX@school.example"
+check "teaching post starts with the Teacher role" "$(echo "$NE" | j 'x.login.created.role_key')" teacher
+NOMAIL=$(curl -s -X POST $B/hr/employees -H "$HA" -H "$C" -d "{\"employee_no\":\"M$SFX\",\"full_name\":\"Ram Lal\",\"email\":\"ramlal.home$SFX@gmail.example\",\"designation\":\"Peon\"}")
+check "personal email only: employee saved, no login yet" "$(echo "$NOMAIL" | j '!!x.login.skipped')" true
+MID=$(echo "$NOMAIL" | j 'x.id')
+check "Users page can't make a staff login without an email" "$(code -X POST $B/users -H "$HA" -H "$C" -d "{\"username\":\"ramlal\",\"password\":\"start123\",\"role\":\"teacher\",\"full_name\":\"Ram Lal\",\"linked_id\":$MID}")" 400
+check "adding the official email later creates the login" "$(curl -s -X PUT $B/hr/employees/$MID -H "$HA" -H "$C" -d "{\"official_email\":\"ram$SFX@school.example\"}" | j 'x.login.created.role_key')" staff
+check "changing the official email renames the login" "$(curl -s -X PUT $B/hr/employees/$MID -H "$HA" -H "$C" -d "{\"official_email\":\"ramlal$SFX@school.example\"}" | j 'x.login.renamed')" "ramlal$SFX@school.example"
+check "bulk: logins for all staff with an official email" "$(curl -s -X POST $B/users/staff-logins -H "$HA" | j 'Array.isArray(x.created)&&Array.isArray(x.skipped)')" true
+# Staff directory: personal details (bank, PAN, Aadhaar, address, personal email) only for admins and the person.
+SU=$(tok ADM2025001 student123)
+check "students don't see staff bank details" "$(curl -s $B/teachers -H "$(H $SU)" | j 'x.some(t=>"bank_account" in t || "pan_no" in t || "email" in t)')" false
+check "colleagues don't see each other's bank details" "$(curl -s $B/teachers -H "$(H $CL)" | j "x.filter(t=>t.id!==$(tid cl$SFX)).some(t=>'bank_account' in t)")" false
 # Principal and role editing
 check "principal sees everything (payroll)" "$(code $B/payroll -H "$(H $P)")" 200
 check "principal lists roles" "$(curl -s $B/roles -H "$(H $P)" | j 'x.roles.length>=8&&x.areas.length===15')" true
@@ -119,7 +139,7 @@ check "built-in role can't be deleted" "$(code -X DELETE $B/roles/clerk -H "$(H 
 check "custom role deleted" "$(code -X DELETE $B/roles/$LIBKEY -H "$(H $P)")" 200
 check "principal can't create Super Admin either" "$(code -X POST $B/users -H "$(H $P)" -H "$C" -d '{"username":"evil2","password":"evil123","role":"admin","full_name":"E"}')" 403
 check "Super Admin can create Super Admin" "$(code -X POST $B/users -H "$HA" -H "$C" -d "{\"username\":\"sa$SFX\",\"password\":\"super123\",\"role\":\"admin\",\"full_name\":\"SA\"}")" 201
-check "users list shows role names" "$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='ac$SFX').role_name")" Accountant
+check "users list shows role names" "$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='ac$SFX@test.example').role_name")" Accountant
 # Students/parents unaffected
 S=$(tok ADM2025001 student123)
 check "student still blocked from fees list" "$(code $B/fees -H "$(H $S)")" 403

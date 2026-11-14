@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { ensureStaffLogin, usernameFor, isEmail } = require('../utils/staffLogin');
 const { makeCrud } = require('../utils/crud');
 const { today: localToday, dbError, isDate, num, badUrl } = require('../utils/http');
 const { isStaff } = require('../middleware/auth');
@@ -610,13 +611,34 @@ exports.users = {
     if (String(password).length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
     const linkProblem = checkLink(role, linked_id);
     if (linkProblem) return res.status(400).json({ error: linkProblem });
+    // A staff login's username is the official email on their staff record (never the personal one).
+    let uname = username;
+    if (role === 'teacher') {
+      const t = db.prepare('SELECT official_email FROM teachers WHERE id = ?').get(linked_id);
+      if (!isEmail(t?.official_email)) return res.status(400).json({ error: 'Add the official email on the staff record first; it becomes their username' });
+      uname = usernameFor(t.official_email);
+    }
     try {
       const info = db.prepare(`
         INSERT INTO users (username, password_hash, role, role_key, full_name, email, phone, linked_id, must_change_password)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-      `).run(username, bcrypt.hashSync(password, 10), role, roleKey, full_name, email || null, phone || null, linked_id || null);
-      res.status(201).json({ id: info.lastInsertRowid });
+      `).run(uname, bcrypt.hashSync(password, 10), role, roleKey, full_name, email || (role === 'teacher' ? uname : null), phone || null, linked_id || null);
+      res.status(201).json({ id: info.lastInsertRowid, username: uname });
     } catch (e) { dbError(res, e); }
+  },
+  // Logins for every active staff member who has an official email but no login yet.
+  staffLogins(req, res) {
+    const created = [], skipped = [];
+    const staff = db.prepare(`SELECT t.id, t.full_name, t.employee_no FROM teachers t
+      WHERE COALESCE(t.status, 'active') = 'active' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.role = 'teacher' AND u.linked_id = t.id)
+      ORDER BY t.full_name`).all();
+    for (const t of staff) {
+      if (roleBeyondMine(req, 'teacher')) { skipped.push({ name: t.full_name, employee_no: t.employee_no, reason: 'Ask a Super Admin' }); continue; }
+      const r = ensureStaffLogin(t.id);
+      if (r.created) created.push({ ...r.created, employee_no: t.employee_no });
+      else skipped.push({ name: t.full_name, employee_no: t.employee_no, reason: r.skipped || 'Has a login' });
+    }
+    res.json({ created, skipped });
   },
   setRole(req, res) {
     const u = db.prepare('SELECT id, role FROM users WHERE id = ?').get(req.params.id);
