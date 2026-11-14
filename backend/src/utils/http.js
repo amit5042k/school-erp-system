@@ -5,13 +5,16 @@ function today() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// A list or object sent where a single value belongs (e.g. class_id: {}) can't be stored; that's bad input, not a server fault.
+const isBindError = (e) => /Too few parameter values|Too many parameter values|can only bind|Missing named parameter/i.test(String(e && e.message || ''));
+
 // Turn SQLite constraint errors into messages a user can act on, without leaking SQL.
 function dbError(res, e) {
   const msg = String(e && e.message || '');
   if (msg.includes('LICENCE_STUDENT_CAP')) return res.status(403).json({ error: 'Your plan\'s student limit has been reached. Contact your ERP provider to upgrade.', code: 'LICENCE_STUDENT_CAP' });
   if (msg.includes('UNIQUE')) return res.status(409).json({ error: 'A record with these details already exists' });
   if (msg.includes('FOREIGN KEY')) return res.status(409).json({ error: 'This record is linked to other data (or refers to a record that does not exist)' });
-  if (msg.includes('CHECK') || msg.includes('NOT NULL')) return res.status(400).json({ error: 'One or more fields have an invalid or missing value' });
+  if (msg.includes('CHECK') || msg.includes('NOT NULL') || isBindError(e)) return res.status(400).json({ error: 'One or more fields have an invalid or missing value' });
   throw e;
 }
 
@@ -21,4 +24,4 @@ const badUrl = (v, label = 'link') =>
   (v && !/^(https?:\/\/|\/api\/files\/)/i.test(String(v)) ? `${label} must be an uploaded file or start with http:// or https://` : null);
 const num = (v) => (v === '' || v == null ? NaN : Number(v));
 
-module.exports = { today, dbError, isDate, num, badUrl };
+module.exports = { today, dbError, isDate, num, badUrl, isBindError };

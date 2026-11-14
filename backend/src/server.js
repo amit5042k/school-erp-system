@@ -82,6 +82,7 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
   console.error(err);
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });
+  if (require('./utils/http').isBindError(err)) return res.status(400).json({ error: 'One or more fields have an invalid or missing value' });
   // The licence's student-limit trigger can fire from any route that adds or re-activates students.
   if (String(err.message).includes('LICENCE_STUDENT_CAP')) {
     return res.status(403).json({ error: 'Your plan\'s student limit has been reached. Contact your ERP provider to upgrade.', code: 'LICENCE_STUDENT_CAP' });

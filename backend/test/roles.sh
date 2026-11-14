@@ -144,6 +144,10 @@ check "users list shows role names" "$(curl -s $B/users -H "$HA" | j "x.find(u=>
 S=$(tok ADM2025001 student123)
 check "student still blocked from fees list" "$(code $B/fees -H "$(H $S)")" 403
 check "student still sees own fees" "$(code $B/fees/student/1 -H "$(H $S)")" 200
+# A password reset ends the person's existing sessions.
+check "clerk's session works before a reset" "$(code $B/auth/me -H "$(H $CL)")" 200
+sleep 1; curl -s -o /dev/null -X POST $B/users/$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='cl$SFX@test.example').id")/reset-password -H "$HA" -H "$C" -d '{"password":"reset1234"}'
+check "after a password reset the old session is refused" "$(code $B/auth/me -H "$(H $CL)")" 401
 # Deleting logins.
 uidof(){ curl -s $B/users -H "$HA" | j "(x.find(u=>u.username==='$1')||{}).id"; }
 check "can't delete your own login" "$(code -X DELETE $B/users/$(uidof admin) -H "$HA")" 400

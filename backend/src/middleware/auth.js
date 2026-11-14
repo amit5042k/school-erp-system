@@ -4,7 +4,14 @@ const roles = require('../utils/roles');
 const { effectiveRole } = require('../utils/permissions');
 const { isParentOf } = require('../utils/family');
 
-const loadUser = db.prepare('SELECT id, username, role, role_key, full_name, linked_id, active, must_change_password, blocked_reason FROM users WHERE id = ?');
+// Changing or resetting a password ends every session signed in before it (e.g. someone who had the old password).
+// A trigger stamps the time on every password change, wherever in the code it happens.
+try { db.exec('ALTER TABLE users ADD COLUMN password_changed_at INTEGER'); } catch (e) { if (!/duplicate column/i.test(e.message)) throw e; }
+db.exec(`CREATE TRIGGER IF NOT EXISTS trg_users_password_changed AFTER UPDATE OF password_hash ON users
+  WHEN NEW.password_hash IS NOT OLD.password_hash
+  BEGIN UPDATE users SET password_changed_at = CAST(strftime('%s', 'now') AS INTEGER) WHERE id = NEW.id; END;`);
+
+const loadUser = db.prepare('SELECT id, username, role, role_key, full_name, linked_id, active, must_change_password, blocked_reason, password_changed_at FROM users WHERE id = ?');
 
 // Reachable while a password change is pending, so the user can see who they are and change it.
 const PASSWORD_CHANGE_ALLOWED = ['/api/auth/me', '/api/auth/change-password', '/api/settings'];
@@ -22,6 +29,9 @@ function authRequired(req, res, next) {
   // Re-read the user so deactivation and role changes take effect immediately, not when the token expires.
   const user = loadUser.get(payload.id);
   if (!user || !user.active) return res.status(401).json({ error: 'Account is disabled' });
+  if (user.password_changed_at && payload.iat < user.password_changed_at) {
+    return res.status(401).json({ error: 'Your password was changed. Please sign in again.', code: 'PASSWORD_CHANGED' });
+  }
   if (user.blocked_reason) return res.status(401).json({ error: `Access blocked: ${user.blocked_reason}`, code: 'BLOCKED' });
   req.user = { id: user.id, username: user.username, role: user.role, base_role: user.role, name: user.full_name, linked_id: user.linked_id };
   const path = req.originalUrl.split('?')[0];
