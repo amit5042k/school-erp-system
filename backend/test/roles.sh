@@ -148,6 +148,15 @@ check "student still sees own fees" "$(code $B/fees/student/1 -H "$(H $S)")" 200
 check "clerk's session works before a reset" "$(code $B/auth/me -H "$(H $CL)")" 200
 sleep 1; curl -s -o /dev/null -X POST $B/users/$(curl -s $B/users -H "$HA" | j "x.find(u=>u.username==='cl$SFX@test.example').id")/reset-password -H "$HA" -H "$C" -d '{"password":"reset1234"}'
 check "after a password reset the old session is refused" "$(code $B/auth/me -H "$(H $CL)")" 401
+# Teacher-level staff change only what they posted themselves.
+T1=$(tok ritu teacher123); T2=$(tok anil teacher123)
+HWID=$(curl -s -X POST $B/homework -H "$(H $T2)" -H "$C" -d '{"class_id":2,"subject":"Science","title":"Anil HW","due_date":"2027-01-10"}' | j 'x.id')
+check "a teacher can't edit another teacher's homework" "$(code -X PUT $B/homework/$HWID -H "$(H $T1)" -H "$C" -d '{"title":"changed"}')" 403
+check "a teacher can't delete another teacher's homework" "$(code -X DELETE $B/homework/$HWID -H "$(H $T1)")" 403
+check "nor replace its attachments" "$(code -X PUT $B/comm/homework/$HWID/attachments -H "$(H $T1)" -H "$C" -d '{"attachments":""}')" 403
+check "the owner can edit their homework" "$(code -X PUT $B/homework/$HWID -H "$(H $T2)" -H "$C" -d '{"title":"Anil HW v2"}')" 200
+check "full-access staff can edit anyone's" "$(code -X PUT $B/homework/$HWID -H "$(H $P)" -H "$C" -d '{"title":"checked"}')" 200
+check "a teacher can't change the exam date sheet" "$(code -X POST $B/exam-schedule -H "$(H $T1)" -H "$C" -d '{"exam_id":1,"class_id":1,"subject":"Maths","date":"2027-03-01"}')" 403
 # Deleting logins.
 uidof(){ curl -s $B/users -H "$HA" | j "(x.find(u=>u.username==='$1')||{}).id"; }
 check "can't delete your own login" "$(code -X DELETE $B/users/$(uidof admin) -H "$HA")" 400

@@ -88,7 +88,7 @@ crud('/prospectus', m.prospectus, { read: ADMIN });
 
 // Examinations (marks are scoped to the student's own record inside the controller)
 crud('/exams', m.exams, { read: ALL });
-crud('/exam-schedule', m.examSchedule, { read: ALL, write: STAFF });
+crud('/exam-schedule', m.examSchedule, { read: ALL });   // the date sheet is set by the office, not by any teacher
 router.get('/marks', authRequired, m.listMarks);
 // Teachers enter marks through /exam/marks/bulk, which enforces subject assignment and the publish lock.
 router.post('/marks', authRequired, requireRole(...ADMIN), m.upsertMarks);

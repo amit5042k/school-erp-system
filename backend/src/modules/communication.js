@@ -412,8 +412,9 @@ function setAnnouncementAttachment(req, res) {
 }
 
 function setActivityFiles(req, res) {
-  const a = db.prepare('SELECT id FROM activities WHERE id = ?').get(req.params.id);
+  const a = db.prepare('SELECT id, created_by FROM activities WHERE id = ?').get(req.params.id);
   if (!a) return res.status(404).json({ error: 'Not found' });
+  if (req.user.role !== 'admin' && a.created_by !== req.user.id) return res.status(403).json({ error: 'You can only change activities you posted' });
   const urls = splitList(req.body.file_urls);
   const names = splitList(req.body.file_names).map(n => n.replace(/,/g, ' '));
   if (urls.length > 30) return res.status(400).json({ error: 'At most 30 files per activity' });

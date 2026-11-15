@@ -417,8 +417,9 @@ function homeworkList(req, res) {
     ${w.length ? 'WHERE ' + w.join(' AND ') : ''} ORDER BY h.assign_date DESC LIMIT 500`).all(...p));
 }
 function homeworkAttachments(req, res) {
-  const h = db.prepare('SELECT id FROM homework WHERE id = ?').get(req.params.id);
+  const h = db.prepare('SELECT id, teacher_id FROM homework WHERE id = ?').get(req.params.id);
   if (!h) return res.status(404).json({ error: 'Not found' });
+  if (req.user.role !== 'admin' && h.teacher_id !== req.user.linked_id) return res.status(403).json({ error: 'You can only change your own homework' });
   const urls = splitList(req.body.attachments);
   const bad = urlProblem(urls, 'attachment');
   if (bad) return res.status(400).json({ error: bad });

@@ -503,14 +503,37 @@ function notOwnSlip(handler) {
 exports.payroll = { ...payrollCrud, create: notOwnSlip(withNetPay(payrollCrud.create)), update: notOwnSlip(withNetPay(payrollCrud.update)),
   remove: notOwnSlip(payrollCrud.remove) };
 
+// Teacher-level staff may change or delete only what they posted themselves; full-access staff and the Super Admin
+// may change anyone's. `column` holds the owner: a staff record id (`by: 'linked_id'`) or a login id (`by: 'id'`).
+function owned(ctrl, table, column, by) {
+  const mine = (req) => req.user[by];
+  const guard = (handler) => (req, res) => {
+    if (req.user.role === 'teacher') {
+      const row = db.prepare(`SELECT ${column} AS owner FROM ${table} WHERE id = ?`).get(req.params.id);
+      if (!row) return res.status(404).json({ error: 'Not found' });
+      if (row.owner == null || Number(row.owner) !== Number(mine(req))) {
+        return res.status(403).json({ error: 'You can only change or delete what you posted yourself' });
+      }
+      if (req.body) delete req.body[column];
+    }
+    return handler(req, res);
+  };
+  return {
+    ...ctrl,
+    create(req, res) { if (req.user.role === 'teacher' || !req.body[column]) req.body[column] = mine(req); return ctrl.create(req, res); },
+    update: guard(ctrl.update),
+    remove: guard(ctrl.remove),
+  };
+}
+
 /* ---------- Homework ---------- */
-exports.homework = makeCrud({
+exports.homework = owned(makeCrud({
   table: 'homework',
   fields: ['class_id','subject','title','description','due_date','teacher_id'],
   orderBy: 'assign_date DESC',
   joins: 'LEFT JOIN classes c ON c.id = homework.class_id LEFT JOIN teachers t ON t.id = homework.teacher_id',
   selectExtra: 'homework.*, c.name AS class_name, c.section AS class_section, t.full_name AS teacher_name',
-});
+}), 'homework', 'teacher_id', 'linked_id');
 
 /* ---------- Communications ---------- */
 exports.communications = {
@@ -539,7 +562,7 @@ const documentCrud = makeCrud({
   validate: (d) => badUrl(d.url, 'url'),
 });
 exports.documents = {
-  ...documentCrud,
+  ...owned(documentCrud, 'documents', 'uploaded_by', 'id'),
   list(req, res) {
     if (req.user.role === 'admin') return documentCrud.list(req, res);
     res.json(db.prepare("SELECT * FROM documents WHERE COALESCE(audience, 'all') IN ('all', ?) ORDER BY uploaded_at DESC").all(req.user.role));
@@ -550,7 +573,6 @@ exports.documents = {
     if (!visible) return res.status(404).json({ error: 'Not found' });
     res.json(row);
   },
-  create(req, res) { req.body.uploaded_by = req.user.id; return documentCrud.create(req, res); },
 };
 
 /* ---------- Settings ---------- */
@@ -736,16 +758,17 @@ const surveyCrud = makeCrud({
   validate: (d) => (!d.question || !d.option1 || !d.option2 ? 'question, option1 and option2 are required'
     : !isDate(d.expire_date) ? 'expire_date must be YYYY-MM-DD' : null),
 });
-exports.surveys = { ...surveyCrud, create(req, res) { req.body.created_by = req.user.id; return surveyCrud.create(req, res); } };
+exports.surveys = owned(surveyCrud, 'surveys', 'created_by', 'id');
 
-exports.activities = makeCrud({
+try { db.exec('ALTER TABLE activities ADD COLUMN created_by INTEGER'); } catch (e) { if (!/duplicate column/i.test(e.message)) throw e; }
+exports.activities = owned(makeCrud({
   table: 'activities',
-  fields: ['class_id','section','name','activity_date','description','file_names'],
+  fields: ['class_id','section','name','activity_date','description','file_names','created_by'],
   orderBy: 'activity_date DESC',
   joins: 'LEFT JOIN classes c ON c.id = activities.class_id',
   selectExtra: 'activities.*, c.name AS class_name, c.section AS class_section',
   validate: (d) => (!d.name ? 'name is required' : !isDate(d.activity_date) ? 'activity_date must be YYYY-MM-DD' : null),
-});
+}), 'activities', 'created_by', 'id');
 
 const PROSPECTUS_START = process.env.PROSPECTUS_START || 'UE/26-27/207';
 // Settings saved on Student Prospectus Settings (stu_settings, created by the students module).
