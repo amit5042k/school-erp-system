@@ -156,6 +156,20 @@ deploy folders, so redeploys keep it; set `ERP_DATA_DIR` (or `DB_PATH`, `UPLOAD_
 Optional settings (SMS, email, WhatsApp, Razorpay, S3 backups) go in the host's environment variables, using the
 names in `backend/.env.example`.
 
+## Updates never reset your data
+
+Deploying a new version, or adding and removing features, changes the code only:
+
+- The database, uploaded files, backups and the sign-in secret live outside the code (`~/school-erp-data` with
+  `npm start`; `backend/data` and `backend/uploads` on a VPS install), so a new deploy folder starts with the same data.
+  Relative paths in `backend/.env` always resolve inside `backend/`, whichever folder the server is started from.
+- On start, the server only creates missing tables and adds missing columns. Students, staff, fees, logins, passwords,
+  roles, settings and editable lists are never rewritten. Default list entries are added once per list; a list you
+  emptied stays empty. The first Super Admin is created only when there are no logins at all.
+- Whenever the server starts with different code than last time, it first copies the database to
+  `backups/pre-update-<date>-<time>.sqlite` (newest 10 kept), on top of the daily backups.
+- Demo data is only ever loaded by `npm run seed:dev`, which you run by hand on a development machine.
+
 ## Production notes
 
 - Set a strong `JWT_SECRET` (`openssl rand -hex 32`); the backend refuses to start without one. Never commit `.env`.

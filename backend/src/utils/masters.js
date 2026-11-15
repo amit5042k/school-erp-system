@@ -21,6 +21,8 @@ db.exec(`
 
 const types = new Map();
 
+db.exec('CREATE TABLE IF NOT EXISTS master_seeded (type TEXT PRIMARY KEY)');
+
 function registerMaster(def) {
   if (!def || !/^[a-z0-9-]+$/.test(def.type) || !def.title) throw new Error(`Invalid master type: ${def && def.type}`);
   if (types.has(def.type)) throw new Error(`Duplicate master type: ${def.type}`);
@@ -29,7 +31,10 @@ function registerMaster(def) {
   const def2 = types.get(def.type);
   if (def2.seed.length) {
     const { c } = db.prepare('SELECT COUNT(*) AS c FROM masters WHERE type = ?').get(def.type);
-    if (!c) {
+    // Only ever once per list: if the school later empties a list on purpose, an update must not refill it.
+    const done = db.prepare('SELECT 1 FROM master_seeded WHERE type = ?').get(def.type);
+    db.prepare('INSERT OR IGNORE INTO master_seeded (type) VALUES (?)').run(def.type);
+    if (!c && !done) {
       const ins = db.prepare('INSERT OR IGNORE INTO masters (type, name, code, sort_order, data) VALUES (?, ?, ?, ?, ?)');
       def2.seed.forEach((s, i) => {
         const item = typeof s === 'string' ? { name: s } : s;

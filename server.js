@@ -12,6 +12,7 @@ const os = require('os');
 // and BACKUP_DIR to choose another place). This runs before the backend loads, so it sees these paths.
 require('dotenv').config({ path: path.join(__dirname, 'backend', '.env') });
 require('dotenv').config();
+require('./backend/src/config/paths');
 const DATA = process.env.ERP_DATA_DIR || path.join(os.homedir(), 'school-erp-data');
 process.env.DB_PATH = process.env.DB_PATH || path.join(DATA, 'school.sqlite');
 process.env.UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(DATA, 'uploads');

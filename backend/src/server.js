@@ -4,6 +4,7 @@ const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 require('dotenv').config();
 process.env.TZ = process.env.TZ || 'Asia/Kolkata';
+require('./config/paths');
 
 // Hosts that deploy straight from GitHub often have no .env: then a random secret is created once and kept next to
 // the database, so sign-ins survive restarts. Setting JWT_SECRET yourself still takes precedence.
@@ -27,6 +28,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+// Before anything opens the database: keep a copy if this start is an update.
+if (process.env.BACKUP_DISABLED !== 'true') require('./utils/preUpdateBackup')();
 const routes = require('./routes');
 
 const app = express();
