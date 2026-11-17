@@ -203,7 +203,7 @@ const STATUSES = ['active', 'inactive', 'left', 'tc_issued', 'passed_out'];
 
 // Turn student/parent logins off when a student stops being active, and back on (only those we turned off) on return.
 function applyStatus(student, newStatus, reason, date, userId) {
-  const linked = db.prepare("SELECT id, active FROM users WHERE role IN ('student','parent') AND linked_id = ?").all(student.id);
+  const linked = db.prepare("SELECT id, role, active FROM users WHERE role IN ('student','parent') AND linked_id = ?").all(student.id);
   let disabled = null, enabled = null;
   if (newStatus === 'active') {
     const lastOff = db.prepare(`SELECT disabled_users FROM stu_status_log WHERE student_id = ? AND new_status != 'active'
@@ -212,7 +212,15 @@ function applyStatus(student, newStatus, reason, date, userId) {
     if (ids.length) db.prepare(`UPDATE users SET active = 1 WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
     enabled = ids.join(',') || null;
   } else if (student.status === 'active' || !student.status) {
-    const ids = linked.filter(u => u.active).map(u => u.id);
+    // A parent with another child still studying here keeps their login, now showing that child.
+    const otherChild = db.prepare(`SELECT s.id FROM parent_children pc JOIN students s ON s.id = pc.student_id
+      WHERE pc.parent_user_id = ? AND s.id != ? AND COALESCE(s.status, 'active') = 'active' ORDER BY s.id LIMIT 1`);
+    const ids = [];
+    for (const u of linked.filter(x => x.active)) {
+      const other = u.role === 'parent' && otherChild.get(u.id, student.id);
+      if (other) db.prepare('UPDATE users SET linked_id = ? WHERE id = ?').run(other.id, u.id);
+      else ids.push(u.id);
+    }
     if (ids.length) db.prepare(`UPDATE users SET active = 0 WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
     disabled = ids.join(',') || null;
   } else {

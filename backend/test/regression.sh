@@ -183,6 +183,16 @@ check "overlapping leave refused" "$(code -X POST $B/leaves -H "$HT" -H "$C" -d 
 check "admin can't move a leave to another person" "$(code -X PUT $B/leaves/$L1 -H "$HA" -H "$C" -d '{"teacher_id":999}')" 400
 curl -s -X POST $B/leaves/$L1/decision -H "$HA" -H "$C" -d '{"action":"approve"}' >/dev/null
 check "approved leave can't be edited" "$(code -X PUT $B/leaves/$L1 -H "$HA" -H "$C" -d '{"to_date":"2027-01-20"}')" 400
+echo "--- a parent keeps their login while another child still studies here"
+S1=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"SIB1\",\"full_name\":\"Sib One\",\"class_id\":$P1}" | j 'x.id')
+S2=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"SIB2\",\"full_name\":\"Sib Two\",\"class_id\":$P1}" | j 'x.id')
+PU=$(curl -s -X POST $B/users -H "$HA" -H "$C" -d "{\"username\":\"sib_parent\",\"password\":\"sibpar123\",\"role\":\"parent\",\"full_name\":\"Sib Parent\",\"linked_id\":$S1}" | j 'x.id')
+curl -s -X POST $B/family/parents/$PU/children -H "$HA" -H "$C" -d "{\"student_id\":$S2}" >/dev/null
+curl -s -X POST $B/stu/students/$S1/status -H "$HA" -H "$C" -d '{"status":"left","reason":"Moved city"}' >/dev/null
+check "parent login still works" "$(code -X POST $B/auth/login -H "$C" -d '{"username":"sib_parent","password":"sibpar123"}')" 200
+check "parent now sees the child still studying" "$(curl -s $B/users -H "$HA" | j "x.find(u=>u.id===$PU).linked_id")" "$S2"
+curl -s -X POST $B/stu/students/$S2/status -H "$HA" -H "$C" -d '{"status":"left","reason":"Moved city"}' >/dev/null
+check "parent login off once no child studies here" "$(code -X POST $B/auth/login -H "$C" -d '{"username":"sib_parent","password":"sibpar123"}')" 401
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff
