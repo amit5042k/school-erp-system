@@ -91,7 +91,9 @@ function assertCanSee(user, test) {
   if (!test) throw err(404, 'Test not found');
   if (isStaff(user)) return null;
   const st = studentFor(user);
-  if (!st || !classIdsOf(test).includes(st.class_id) || test.status === 'draft') throw err(404, 'Test not found');
+  // A test they took stays theirs after a promotion or section change.
+  const took = st && db.prepare('SELECT 1 FROM ot_attempts WHERE test_id = ? AND student_id = ?').get(test.id, st.id);
+  if (!st || (!took && !classIdsOf(test).includes(st.class_id)) || test.status === 'draft') throw err(404, 'Test not found');
   return st;
 }
 
@@ -302,7 +304,7 @@ const staff = {
         a.id AS attempt_id, a.started_at, a.submitted_at, a.auto_submitted, a.score, a.max_score, a.correct_count, a.wrong_count
       FROM students s JOIN classes c ON c.id = s.class_id
       LEFT JOIN ot_attempts a ON a.student_id = s.id AND a.test_id = ?
-      WHERE s.class_id IN (${ph}) AND (COALESCE(s.status, 'active') = 'active' OR a.id IS NOT NULL)
+      WHERE a.id IS NOT NULL OR (s.class_id IN (${ph}) AND COALESCE(s.status, 'active') = 'active')
       ORDER BY c.section, s.roll_no, s.full_name`).all(t.id, ...ids);
     const attempts = db.prepare('SELECT answers FROM ot_attempts WHERE test_id = ? AND submitted_at IS NOT NULL').all(t.id).map(a => parse(a.answers, {}));
     const analysis = questions.map(q => {
@@ -363,11 +365,12 @@ const student = {
     const st = studentFor(req.user);
     if (!st) return res.json([]);
     expireDue();
+    const att = db.prepare('SELECT * FROM ot_attempts WHERE test_id = ? AND student_id = ?');
+    const took = new Set(db.prepare('SELECT test_id FROM ot_attempts WHERE student_id = ?').all(st.id).map(r => r.test_id));
     const tests = db.prepare(`SELECT t.*, (SELECT COUNT(*) FROM ot_questions q WHERE q.test_id = t.id) AS questions,
         (SELECT COALESCE(SUM(marks), 0) FROM ot_questions q WHERE q.test_id = t.id) AS total_marks
       FROM ot_tests t WHERE t.status != 'draft' ORDER BY t.start_at DESC`).all()
-      .filter(t => classIdsOf(t).includes(st.class_id));
-    const att = db.prepare('SELECT * FROM ot_attempts WHERE test_id = ? AND student_id = ?');
+      .filter(t => classIdsOf(t).includes(st.class_id) || took.has(t.id));
     res.json(tests.map(t => {
       const a = att.get(t.id, st.id);
       return {

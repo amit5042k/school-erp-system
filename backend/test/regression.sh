@@ -162,6 +162,21 @@ curl -s -X POST $B/auth/change-password -H "Authorization: Bearer $PK0" -H "$C" 
 PK=$(tok promo_kid promo456)
 check "promoted student still sees last year's published card" "$(curl -s "$B/exam/report-card?exam_id=$EX" -H "Authorization: Bearer $PK" | j 'x.cards.length')" 1
 check "promoted student still sees last year's marks" "$(curl -s "$B/exam/my-marks" -H "Authorization: Bearer $PK" | j 'x.length')" 1
+echo "--- online test attempts stay with the student after a class change"
+P3=$(curl -s -X POST $B/classes -H "$HA" -H "$C" -d '{"name":"OT Class","section":"Q"}' | j 'x.id')
+K3=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"OT1\",\"full_name\":\"OT Kid\",\"class_id\":$P3}" | j 'x.id')
+curl -s -X POST $B/users -H "$HA" -H "$C" -d "{\"username\":\"ot_kid\",\"password\":\"otkid123\",\"role\":\"student\",\"full_name\":\"OT Kid\",\"linked_id\":$K3}" >/dev/null
+OK0=$(tok ot_kid otkid123); curl -s -X POST $B/auth/change-password -H "Authorization: Bearer $OK0" -H "$C" -d '{"current_password":"otkid123","new_password":"otkid456"}' >/dev/null
+HK="Authorization: Bearer $(tok ot_kid otkid456)"
+ST=$(node -e 'console.log(new Date(Date.now()-60000).toISOString())'); EN=$(node -e 'console.log(new Date(Date.now()+3600000).toISOString())')
+OT=$(curl -s -X POST $B/online-tests -H "$HA" -H "$C" -d "{\"title\":\"OT\",\"class_id\":$P3,\"start_at\":\"$ST\",\"end_at\":\"$EN\",\"duration_min\":10,\"questions\":[{\"text\":\"2+2\",\"options\":[\"3\",\"4\"],\"correct\":[1]}]}" | j 'x.id')
+curl -s -X POST $B/online-tests/$OT/publish -H "$HA" -H "$C" -d '{}' >/dev/null
+AT=$(curl -s -X POST $B/online-tests/$OT/start -H "$HK" -H "$C" -d '{}' | j 'x.attempt_id')
+curl -s -X POST $B/online-tests/attempts/$AT/submit -H "$HK" -H "$C" -d '{"answers":{}}' >/dev/null
+curl -s -X PUT $B/students/$K3 -H "$HA" -H "$C" -d "{\"class_id\":$P1}" >/dev/null
+check "moved student still lists the test they took" "$(curl -s $B/online-tests/my -H "$HK" | j "x.some(t=>t.id===$OT)")" true
+check "moved student can open its result" "$(code $B/online-tests/$OT/my-result -H "$HK")" 200
+check "teacher results still show the moved student" "$(curl -s $B/online-tests/$OT/results -H "$HA" | j "x.students.some(s=>s.student_id===$K3)")" true
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff
