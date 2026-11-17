@@ -7,7 +7,8 @@ const db = require('../config/db');
 
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
 const usernameFor = (email) => String(email || '').trim().toLowerCase();
-// Teaching posts start with the Teacher role, everyone else as Non-Teaching Staff; Users & Roles can change it.
+// Teaching posts (or anyone with a subject) start with the Teacher role, everyone else as Non-Teaching Staff;
+// Users & Roles can change it.
 const TEACHING = /teach|faculty|lecturer|\b(pgt|tgt|prt|ntt)\b/i;
 const tempPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -37,7 +38,8 @@ function ensureStaffLogin(teacherId) {
   if (!isEmail(t.official_email)) return { skipped: 'No official email yet; the login is created once one is added' };
   if (takenBy(username)) return { skipped: `${username} is already used by another login` };
   const password = tempPassword();
-  const roleKey = TEACHING.test([t.staff_category, t.department, t.designation, t.subject].filter(Boolean).join(' ')) ? 'teacher' : 'staff';
+  // Anyone with a teaching subject (e.g. "Maths") is a teacher too, not only those whose post says so.
+  const roleKey = !/^(|-+|n\/?a|nil|none)$/i.test(String(t.subject || '').trim()) || TEACHING.test([t.staff_category, t.department, t.designation].filter(Boolean).join(' ')) ? 'teacher' : 'staff';
   db.prepare(`INSERT INTO users (username, password_hash, role, role_key, full_name, email, phone, linked_id, must_change_password)
     VALUES (?, ?, 'teacher', ?, ?, ?, ?, ?, 1)`).run(username, bcrypt.hashSync(password, 10), roleKey, t.full_name, username, t.phone || null, t.id);
   return { created: { username, password, role_key: roleKey, name: t.full_name } };

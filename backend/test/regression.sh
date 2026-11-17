@@ -162,5 +162,8 @@ curl -s -X POST $B/auth/change-password -H "Authorization: Bearer $PK0" -H "$C" 
 PK=$(tok promo_kid promo456)
 check "promoted student still sees last year's published card" "$(curl -s "$B/exam/report-card?exam_id=$EX" -H "Authorization: Bearer $PK" | j 'x.cards.length')" 1
 check "promoted student still sees last year's marks" "$(curl -s "$B/exam/my-marks" -H "Authorization: Bearer $PK" | j 'x.length')" 1
+echo "--- staff logins"
+check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
+check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff
 echo; echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
