@@ -193,6 +193,15 @@ check "parent login still works" "$(code -X POST $B/auth/login -H "$C" -d '{"use
 check "parent now sees the child still studying" "$(curl -s $B/users -H "$HA" | j "x.find(u=>u.id===$PU).linked_id")" "$S2"
 curl -s -X POST $B/stu/students/$S2/status -H "$HA" -H "$C" -d '{"status":"left","reason":"Moved city"}' >/dev/null
 check "parent login off once no child studies here" "$(code -X POST $B/auth/login -H "$C" -d '{"username":"sib_parent","password":"sibpar123"}')" 401
+echo "--- a late fine is charged once, not again on every part payment"
+FS=$(curl -s $B/finance/settings -H "$HA")
+curl -s -X PUT $B/finance/settings -H "$HA" -H "$C" -d '{"fine_type":"flat","fine_amount":50,"grace_days":0,"max_fine":0}' >/dev/null
+FST=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"FINE1\",\"full_name\":\"Fine Kid\",\"class_id\":$P1}" | j 'x.id')
+FID=$(curl -s -X POST $B/fees -H "$HA" -H "$C" -d "{\"student_id\":$FST,\"term\":\"Old dues\",\"amount\":1000,\"due_date\":\"2026-01-10\"}" | j 'x.id')
+check "fine due before paying" "$(curl -s $B/finance/student-dues/$FST -H "$HA" | j 'x.total_fine')" 50
+curl -s -X POST $B/finance/collect -H "$HA" -H "$C" -d "{\"student_id\":$FST,\"items\":[{\"fee_id\":$FID,\"amount\":400,\"fine\":50}]}" >/dev/null
+check "no second fine after paying it" "$(curl -s $B/finance/student-dues/$FST -H "$HA" | j 'x.total_fine')" 0
+curl -s -X PUT $B/finance/settings -H "$HA" -H "$C" -d "$FS" >/dev/null
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff

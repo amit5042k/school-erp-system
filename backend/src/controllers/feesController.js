@@ -55,7 +55,9 @@ function fineFor(fee, onDate = today(), s = settings()) {
   if (days <= 0) return 0;
   let fine = s.fine_type === 'flat' ? s.fine_amount : days * s.fine_amount;
   if (s.max_fine > 0) fine = Math.min(fine, s.max_fine);
-  return round2(fine);
+  // Fine already paid on this fee (not on cancelled or bounced receipts) isn't charged again on the next payment.
+  const paidFine = fee.id ? db.prepare('SELECT COALESCE(SUM(fine), 0) AS f FROM fee_payments WHERE fee_id = ? AND reversed = 0').get(fee.id).f : 0;
+  return round2(Math.max(0, fine - paidFine));
 }
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
