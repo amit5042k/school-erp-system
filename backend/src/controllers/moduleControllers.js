@@ -334,6 +334,15 @@ const LEAVE_SELECT = `SELECT staff_leaves.*, t.full_name AS teacher_name, t.empl
   t.department AS department, t.phone AS phone, t.photo_url AS photo_url
   FROM staff_leaves JOIN teachers t ON t.id = staff_leaves.teacher_id`;
 
+// Another pending or approved leave of the same person covering any of these days.
+function overlappingLeave(teacherId, from, to, exceptId = 0) {
+  if (!teacherId || !isDate(from) || !isDate(to)) return null;
+  const o = db.prepare(`SELECT leave_type, status, COALESCE(approved_from, from_date) AS f, COALESCE(approved_to, to_date) AS t FROM staff_leaves
+    WHERE teacher_id = ? AND id != ? AND status IN ('pending', 'approved')
+      AND COALESCE(approved_from, from_date) <= ? AND COALESCE(approved_to, to_date) >= ? LIMIT 1`).get(teacherId, exceptId, to, from);
+  return o ? `There is already ${o.status === 'approved' ? 'an approved' : 'a pending'} ${o.leave_type} from ${o.f} to ${o.t} for these dates` : null;
+}
+
 // Teachers act only on their own leaves; admins on anyone's.
 function ownLeave(req, res) {
   const leave = db.prepare('SELECT * FROM staff_leaves WHERE id = ?').get(req.params.id);
@@ -361,11 +370,21 @@ exports.leaves = {
       req.body.teacher_id = req.user.linked_id;
     }
     if (!req.body.session) req.body.session = currentSession();
+    const clash = overlappingLeave(req.body.teacher_id, req.body.from_date, req.body.to_date);
+    if (clash) return res.status(409).json({ error: clash });
     return leaveCrud.create(req, res);
   },
   update(req, res) {
     const leave = ownLeave(req, res); if (!leave) return;
-    if (req.user.role !== 'admin') delete req.body.teacher_id;
+    // Only a pending application can be edited, and it stays the same person's: otherwise a leave could be moved to
+    // a colleague, approved, and moved back (deciding your own leave), or its dates changed after approval.
+    if (leave.status !== 'pending') return res.status(400).json({ error: `Leave is already ${leave.status}; cancel it and apply again instead` });
+    if (req.body.teacher_id != null && Number(req.body.teacher_id) !== leave.teacher_id) {
+      return res.status(400).json({ error: 'A leave application cannot be moved to another staff member; apply a new one for them' });
+    }
+    delete req.body.teacher_id;
+    const clash = overlappingLeave(leave.teacher_id, req.body.from_date ?? leave.from_date, req.body.to_date ?? leave.to_date, leave.id);
+    if (clash) return res.status(409).json({ error: clash });
     return leaveCrud.update(req, res);
   },
   remove(req, res) {
@@ -427,6 +446,9 @@ exports.leaveDecision = (req, res) => {
     if (!isDate(from) || !isDate(to)) return res.status(400).json({ error: 'approved dates must be YYYY-MM-DD' });
     if (from > to) return res.status(400).json({ error: 'Approved To must not be before Approved From' });
     if (from < leave.from_date || to > leave.to_date) return res.status(400).json({ error: 'Approved dates must fall within the requested leave period' });
+    const clash = db.prepare(`SELECT 1 FROM staff_leaves WHERE teacher_id = ? AND id != ? AND status = 'approved'
+      AND COALESCE(approved_from, from_date) <= ? AND COALESCE(approved_to, to_date) >= ?`).get(leave.teacher_id, leave.id, to, from);
+    if (clash) return res.status(409).json({ error: 'This staff member already has approved leave on some of these days' });
   }
   db.prepare(`
     UPDATE staff_leaves

@@ -177,6 +177,12 @@ curl -s -X PUT $B/students/$K3 -H "$HA" -H "$C" -d "{\"class_id\":$P1}" >/dev/nu
 check "moved student still lists the test they took" "$(curl -s $B/online-tests/my -H "$HK" | j "x.some(t=>t.id===$OT)")" true
 check "moved student can open its result" "$(code $B/online-tests/$OT/my-result -H "$HK")" 200
 check "teacher results still show the moved student" "$(curl -s $B/online-tests/$OT/results -H "$HA" | j "x.students.some(s=>s.student_id===$K3)")" true
+echo "--- leave overlaps and reassignment"
+L1=$(curl -s -X POST $B/leaves -H "$HT" -H "$C" -d '{"leave_type":"Earned Leave","from_date":"2027-01-10","to_date":"2027-01-12"}' | j 'x.id')
+check "overlapping leave refused" "$(code -X POST $B/leaves -H "$HT" -H "$C" -d '{"leave_type":"Earned Leave","from_date":"2027-01-12","to_date":"2027-01-14"}')" 409
+check "admin can't move a leave to another person" "$(code -X PUT $B/leaves/$L1 -H "$HA" -H "$C" -d '{"teacher_id":999}')" 400
+curl -s -X POST $B/leaves/$L1/decision -H "$HA" -H "$C" -d '{"action":"approve"}' >/dev/null
+check "approved leave can't be edited" "$(code -X PUT $B/leaves/$L1 -H "$HA" -H "$C" -d '{"to_date":"2027-01-20"}')" 400
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff
