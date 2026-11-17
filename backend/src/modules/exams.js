@@ -179,6 +179,50 @@ function settings() {
 function getExam(id) { return db.prepare('SELECT * FROM exams WHERE id = ?').get(id); }
 function getClass(id) { return db.prepare('SELECT * FROM classes WHERE id = ?').get(id); }
 
+// Marks keep the class they were entered in, so last year's results stay with last year's class after promotion.
+// Marks saved before this column existed get it once: the class the student left by a later promotion, if any,
+// else their class now. Only empty values are filled; nothing existing is changed.
+{
+  const { addColumn } = require('./_kit');
+  addColumn('marks', 'class_id INTEGER');
+  db.exec(`CREATE TRIGGER IF NOT EXISTS marks_class_default AFTER INSERT ON marks WHEN NEW.class_id IS NULL
+    BEGIN UPDATE marks SET class_id = (SELECT class_id FROM students WHERE id = NEW.student_id) WHERE id = NEW.id; END`);
+  if (db.prepare('SELECT 1 FROM marks WHERE class_id IS NULL LIMIT 1').get()) {
+    const hasPromotions = !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'academic_promotions'").get();
+    db.exec(`UPDATE marks SET class_id = COALESCE(
+      ${hasPromotions ? `(SELECT p.from_class_id FROM academic_promotions p JOIN exams e ON e.id = marks.exam_id
+        WHERE p.student_id = marks.student_id AND p.undone_at IS NULL AND COALESCE(e.end_date, e.start_date) IS NOT NULL
+          AND date(p.promoted_at) > date(COALESCE(e.end_date, e.start_date)) ORDER BY p.promoted_at, p.id LIMIT 1),` : ''}
+      (SELECT class_id FROM students WHERE id = marks.student_id)) WHERE class_id IS NULL`);
+  }
+}
+// The class a student's marks for an exam were entered in (their class now if there are none yet).
+function classForExam(studentId, examId) {
+  return db.prepare('SELECT class_id FROM marks WHERE student_id = ? AND exam_id = ? AND class_id IS NOT NULL LIMIT 1').get(studentId, examId)?.class_id
+    ?? db.prepare('SELECT class_id FROM students WHERE id = ?').get(studentId)?.class_id;
+}
+
+// Students on a class's results for these exams: those whose marks were entered in this class (even if promoted
+// or passed out since), plus today's active students of the class who have no marks for them in another class.
+function examRoster(classId, examIds) {
+  classId = Number(classId);
+  const ids = [].concat(examIds).map(Number).filter(Boolean);
+  if (!ids.length) return classStudents(classId);
+  const ph = ids.map(() => '?').join(',');
+  const recorded = new Set(db.prepare(`SELECT DISTINCT student_id FROM marks WHERE exam_id IN (${ph}) AND class_id = ?`).all(...ids, classId).map(r => r.student_id));
+  const elsewhere = new Set(db.prepare(`SELECT DISTINCT student_id FROM marks WHERE exam_id IN (${ph}) AND class_id != ?`).all(...ids, classId).map(r => r.student_id));
+  const list = classStudents(classId).filter(st => recorded.has(st.id) || !elsewhere.has(st.id));
+  const extra = [...recorded].filter(id => !list.some(st => st.id === id));
+  if (extra.length) {
+    list.push(...db.prepare(`
+      SELECT s.id, s.admission_no, s.full_name, s.roll_no, s.gender, s.dob, s.father_name, s.mother_name, c.id AS class_id,
+             c.name AS class_name, c.section AS class_section
+      FROM students s JOIN classes c ON c.id = ? WHERE s.id IN (${extra.map(() => '?').join(',')})`).all(classId, ...extra));
+    list.sort((a, b) => (a.roll_no == null) - (b.roll_no == null) || (a.roll_no ?? 0) - (b.roll_no ?? 0) || String(a.full_name).localeCompare(b.full_name));
+  }
+  return list;
+}
+
 function classStudents(classId) {
   return db.prepare(`
     SELECT s.id, s.admission_no, s.full_name, s.roll_no, s.gender, s.dob, s.father_name, s.mother_name, s.class_id,
@@ -419,7 +463,7 @@ const h = {
     if (!exam || !cls) return bad(res, 'Exam or class not found', 404);
     const cs = db.prepare('SELECT * FROM exam_class_subjects WHERE class_id = ? AND subject = ?').get(class_id, subject);
     const session = currentSession();
-    let students = classStudents(class_id);
+    let students = examRoster(class_id, exam_id);
     if (cs && cs.is_optional) {
       const taking = new Set(db.prepare('SELECT student_id FROM exam_student_subjects WHERE subject = ? AND session = ?').all(subject, session).map(r => r.student_id));
       students = students.filter(s => taking.has(s.id));
@@ -445,7 +489,7 @@ const h = {
     if (req.user.role !== 'admin' && publishState(exam_id, class_id).result_published) return bad(res, 'The result is already published; ask the admin to unpublish it to change marks', 403);
     const cs = db.prepare('SELECT * FROM exam_class_subjects WHERE class_id = ? AND subject = ?').get(class_id, subject);
     const defMax = cs ? cs.max_marks : 100;
-    const inClass = new Set(classStudents(class_id).map(s => s.id));
+    const inClass = new Set(examRoster(class_id, exam_id).map(s => s.id));
     const bands = gradeBands(cls.name);
     const clean = [];
     for (const r of rows) {
@@ -459,10 +503,10 @@ const h = {
       clean.push({ student_id: Number(r.student_id), got, max, grade });
     }
     const up = db.prepare(`
-      INSERT INTO marks (exam_id, student_id, subject, marks_obtained, max_marks, grade) VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO marks (exam_id, student_id, subject, marks_obtained, max_marks, grade, class_id) VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(exam_id, student_id, subject) DO UPDATE SET
-        marks_obtained = excluded.marks_obtained, max_marks = excluded.max_marks, grade = excluded.grade`);
-    db.transaction(() => { for (const c of clean) up.run(exam_id, c.student_id, subject, c.got, c.max, c.grade); })();
+        marks_obtained = excluded.marks_obtained, max_marks = excluded.max_marks, grade = excluded.grade, class_id = excluded.class_id`);
+    db.transaction(() => { for (const c of clean) up.run(exam_id, c.student_id, subject, c.got, c.max, c.grade, Number(class_id)); })();
     res.json({ ok: true, saved: clean.length });
   },
   marksCount(req, res) {
@@ -470,16 +514,16 @@ const h = {
     if (!exam_id || !class_id) return bad(res, 'exam_id and class_id are required');
     const rows = db.prepare(`
       SELECT m.subject, COUNT(*) AS count FROM marks m JOIN students s ON s.id = m.student_id
-      WHERE m.exam_id = ? AND s.class_id = ? AND (? = '' OR m.subject = ?) GROUP BY m.subject ORDER BY m.subject`)
-      .all(exam_id, class_id, subject || '', subject || '');
+      WHERE m.exam_id = ? AND COALESCE(m.class_id, s.class_id) = ? AND (? = '' OR m.subject = ?) GROUP BY m.subject ORDER BY m.subject`)
+      .all(exam_id, Number(class_id), subject || '', subject || '');
     res.json(rows);
   },
   marksDelete(req, res) {
     const { exam_id, class_id, subject } = req.query;
     if (!exam_id || !class_id || !subject) return bad(res, 'exam_id, class_id and subject are required');
     const info = db.prepare(`
-      DELETE FROM marks WHERE exam_id = ? AND subject = ? AND student_id IN (SELECT id FROM students WHERE class_id = ?)`)
-      .run(exam_id, subject, class_id);
+      DELETE FROM marks WHERE exam_id = ? AND subject = ? AND COALESCE(class_id, (SELECT class_id FROM students WHERE id = marks.student_id)) = ?`)
+      .run(exam_id, subject, Number(class_id));
     res.json({ ok: true, deleted: info.changes });
   },
 
@@ -488,8 +532,8 @@ const h = {
     const classes = db.prepare('SELECT id, name, section FROM classes ORDER BY name, section').all();
     const states = db.prepare('SELECT * FROM exam_publish').all();
     const counts = db.prepare(`
-      SELECT m.exam_id, s.class_id, COUNT(DISTINCT m.student_id) AS students, COUNT(*) AS entries
-      FROM marks m JOIN students s ON s.id = m.student_id GROUP BY m.exam_id, s.class_id`).all();
+      SELECT m.exam_id, COALESCE(m.class_id, s.class_id) AS class_id, COUNT(DISTINCT m.student_id) AS students, COUNT(*) AS entries
+      FROM marks m JOIN students s ON s.id = m.student_id GROUP BY m.exam_id, COALESCE(m.class_id, s.class_id)`).all();
     res.json({ exams, classes, states, counts });
   },
   publishPut(req, res) {
@@ -580,8 +624,8 @@ const h = {
     const totals = db.prepare(`
       SELECT m.student_id, SUM(m.marks_obtained) * 100.0 / SUM(m.max_marks) AS pct
       FROM marks m JOIN students s ON s.id = m.student_id
-      WHERE m.exam_id = ? AND s.class_id = ? AND COALESCE(s.status, 'active') = 'active' GROUP BY m.student_id
-      ORDER BY pct DESC`).all(exam_id, class_id);
+      WHERE m.exam_id = ? AND COALESCE(m.class_id, s.class_id) = ? AND COALESCE(s.status, 'active') IN ('active', 'passed_out') GROUP BY m.student_id
+      ORDER BY pct DESC`).all(exam_id, Number(class_id));
     const up = db.prepare(`INSERT INTO exam_student_terms (student_id, exam_id, rank) VALUES (?, ?, ?)
       ON CONFLICT(student_id, exam_id) DO UPDATE SET rank = excluded.rank`);
     let rank = 0, prev = null, i = 0;
@@ -657,9 +701,9 @@ const h = {
     if (!exam_id || !class_id) return bad(res, 'exam_id and class_id are required');
     const exam = getExam(exam_id), cls = getClass(class_id);
     if (!exam || !cls) return bad(res, 'Exam or class not found', 404);
-    const students = classStudents(class_id);
+    const students = examRoster(class_id, exam_id);
     const marks = db.prepare(`
-      SELECT m.* FROM marks m JOIN students s ON s.id = m.student_id WHERE m.exam_id = ? AND s.class_id = ?`).all(exam_id, class_id);
+      SELECT m.* FROM marks m JOIN students s ON s.id = m.student_id WHERE m.exam_id = ? AND COALESCE(m.class_id, s.class_id) = ?`).all(exam_id, Number(class_id));
     let subjects = classSubjects(class_id).map(s => ({ subject: s.subject, max_marks: s.max_marks }));
     for (const m of marks) if (!subjects.some(s => s.subject === m.subject)) subjects.push({ subject: m.subject, max_marks: m.max_marks });
     const map = {};
@@ -683,11 +727,11 @@ const h = {
     const st = db.prepare('SELECT id, class_id FROM students WHERE id = ?').get(studentId);
     if (!st) return bad(res, 'Student not found', 404);
     let rows = db.prepare(`
-      SELECT m.exam_id, e.name AS exam_name, m.subject, m.marks_obtained, m.max_marks, m.grade
+      SELECT m.exam_id, e.name AS exam_name, m.subject, m.marks_obtained, m.max_marks, m.grade, m.class_id
       FROM marks m JOIN exams e ON e.id = m.exam_id WHERE m.student_id = ? ${req.query.exam_id ? 'AND m.exam_id = ?' : ''}
       ORDER BY e.start_date, e.id, m.subject`).all(...(req.query.exam_id ? [studentId, req.query.exam_id] : [studentId]));
     if (!isStaff(req.user)) {
-      rows = rows.filter(r => publishState(r.exam_id, st.class_id).marks_published && !isBlocked(studentId, r.exam_id));
+      rows = rows.filter(r => publishState(r.exam_id, r.class_id ?? st.class_id).marks_published && !isBlocked(studentId, r.exam_id));
     }
     res.json(rows);
   },
@@ -697,22 +741,23 @@ const h = {
     const staff = isStaff(req.user);
     let studentIds;
     let classId = Number(req.query.class_id) || null;
+    let examIds = String(req.query.exam_ids || req.query.exam_id || '').split(',').map(Number).filter(Boolean);
+    if (!examIds.length) return bad(res, 'Choose at least one exam');
+    // One student's card is printed in the class they sat the exam in (last year's class after a promotion).
     if (!staff) {
       if (!req.user.linked_id) return bad(res, 'Your account is not linked to a student');
       studentIds = [req.user.linked_id];
-      classId = db.prepare('SELECT class_id FROM students WHERE id = ?').get(req.user.linked_id)?.class_id;
+      classId = classForExam(req.user.linked_id, examIds[0]);
     } else if (req.query.student_id) {
       studentIds = [Number(req.query.student_id)];
-      classId = db.prepare('SELECT class_id FROM students WHERE id = ?').get(studentIds[0])?.class_id;
+      classId = classForExam(studentIds[0], examIds[0]);
     } else {
       if (!classId) return bad(res, 'Choose a class or a student');
-      studentIds = classStudents(classId).map(x => x.id);
+      studentIds = examRoster(classId, examIds).map(x => x.id);
     }
     const cls = classId ? getClass(classId) : null;
     if (!cls) return bad(res, 'Class not found', 404);
 
-    let examIds = String(req.query.exam_ids || req.query.exam_id || '').split(',').map(Number).filter(Boolean);
-    if (!examIds.length) return bad(res, 'Choose at least one exam');
     let exams = examIds.map(getExam).filter(Boolean);
     if (!staff) {
       exams = exams.filter(e => publishState(e.id, classId).result_published && !isBlocked(studentIds[0], e.id));
@@ -734,7 +779,7 @@ const h = {
 
     const cards = studentIds.map(id => {
       const stu = db.prepare(`
-        SELECT s.*, c.name AS class_name, c.section AS class_section FROM students s LEFT JOIN classes c ON c.id = s.class_id WHERE s.id = ?`).get(id);
+        SELECT s.*, c.id AS class_id, c.name AS class_name, c.section AS class_section FROM students s LEFT JOIN classes c ON c.id = ? WHERE s.id = ?`).get(cls.id, id);
       if (!stu) return null;
       const mine = allMarks.filter(m => m.student_id === id);
       const optional = new Set(db.prepare('SELECT subject FROM exam_student_subjects WHERE student_id = ? AND session = ?').all(id, session).map(r => r.subject));
@@ -800,12 +845,12 @@ registerReport({
         COUNT(*) AS appeared, AVG(m.marks_obtained * 100.0 / m.max_marks) AS average,
         MAX(m.marks_obtained) AS highest, MIN(m.marks_obtained) AS lowest,
         SUM(m.marks_obtained * 100.0 / m.max_marks >= ?) AS passed
-      FROM marks m JOIN students s ON s.id = m.student_id JOIN classes c ON c.id = s.class_id
-      WHERE m.exam_id = ? AND (? = '' OR s.class_id = ?) AND COALESCE(m.grade, '') != 'AB'
+      FROM marks m JOIN students s ON s.id = m.student_id JOIN classes c ON c.id = COALESCE(m.class_id, s.class_id)
+      WHERE m.exam_id = ? AND (? = '' OR c.id = ?) AND COALESCE(m.grade, '') != 'AB'
       GROUP BY c.id, m.subject ORDER BY c.name, c.section, m.subject`).all(passPct, p.exam_id, p.class_id, p.class_id);
     const topper = db.prepare(`
       SELECT s.full_name FROM marks m JOIN students s ON s.id = m.student_id
-      WHERE m.exam_id = ? AND s.class_id = ? AND m.subject = ? ORDER BY m.marks_obtained DESC LIMIT 1`);
+      WHERE m.exam_id = ? AND COALESCE(m.class_id, s.class_id) = ? AND m.subject = ? ORDER BY m.marks_obtained DESC LIMIT 1`);
     return rows.map(r => ({ ...r, average: round(r.average, 1), pass_pct: r.appeared ? round((r.passed / r.appeared) * 100, 1) : 0, topper: topper.get(p.exam_id, r.class_id, r.subject)?.full_name }));
   },
 });

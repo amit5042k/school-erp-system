@@ -142,5 +142,25 @@ check "wrong role + wrong password: generic msg" "$(curl -s -X POST $B/auth/logi
 check "short reset password rejected" "$(code -X POST $B/users/$UID_/reset-password -H "$HA" -H "$C" -d '{"password":"1"}')" 400
 check "user with bad role rejected" "$(code -X POST $B/users -H "$HA" -H "$C" -d '{"username":"zz","password":"zzzzzz","role":"god","full_name":"Z"}')" 400
 check "teacher user needs a linked teacher" "$(code -X POST $B/users -H "$HA" -H "$C" -d '{"username":"zz","password":"zzzzzz","role":"teacher","full_name":"Z"}')" 400
+echo "--- results stay with the class they were earned in after promotion"
+P1=$(curl -s -X POST $B/classes -H "$HA" -H "$C" -d '{"name":"Promo 1","section":"Z"}' | j 'x.id')
+P2=$(curl -s -X POST $B/classes -H "$HA" -H "$C" -d '{"name":"Promo 2","section":"Z"}' | j 'x.id')
+K1=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"PRM1\",\"full_name\":\"Promo Kid\",\"class_id\":$P1}" | j 'x.id')
+K2=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"PRM2\",\"full_name\":\"Stay Kid\",\"class_id\":$P1}" | j 'x.id')
+EX=$(curl -s -X POST $B/exams -H "$HA" -H "$C" -d '{"name":"Promo Exam","start_date":"2026-09-01","end_date":"2026-09-05"}' | j 'x.id')
+curl -s -X POST $B/exam/marks/bulk -H "$HA" -H "$C" -d "{\"exam_id\":$EX,\"class_id\":$P1,\"subject\":\"English\",\"rows\":[{\"student_id\":$K1,\"marks_obtained\":80},{\"student_id\":$K2,\"marks_obtained\":50}]}" >/dev/null
+curl -s -X PUT $B/exam/publish -H "$HA" -H "$C" -d "{\"exam_id\":$EX,\"class_id\":$P1,\"marks_published\":true,\"result_published\":true}" >/dev/null
+check "promote" "$(code -X POST $B/academic/promote -H "$HA" -H "$C" -d "{\"from_session\":\"2026-2027\",\"to_session\":\"2027-2028\",\"items\":[{\"student_id\":$K1,\"result\":\"promoted\",\"to_class_id\":$P2}]}")" 201
+check "old class card still has the promoted student" "$(curl -s "$B/exam/report-card?class_id=$P1&exam_id=$EX" -H "$HA" | j "x.cards.map(c=>c.student.full_name+'@'+c.student.class_name).join()")" "Promo Kid@Promo 1,Stay Kid@Promo 1"
+check "new class card doesn't take last year's marks" "$(curl -s "$B/exam/report-card?class_id=$P2&exam_id=$EX" -H "$HA" | j 'x.cards.length')" 0
+check "one student's card uses the exam's class" "$(curl -s "$B/exam/report-card?student_id=$K1&exam_id=$EX" -H "$HA" | j 'x.class.id')" "$P1"
+check "award list keeps the promoted student" "$(curl -s "$B/exam/award-list?class_id=$P1&exam_id=$EX" -H "$HA" | j 'x.students.filter(s=>s.total>0).length')" 2
+check "marks count by exam class" "$(curl -s "$B/exam/marks-count?class_id=$P1&exam_id=$EX" -H "$HA" | j 'x[0].count')" 2
+curl -s -X POST $B/users -H "$HA" -H "$C" -d "{\"username\":\"promo_kid\",\"password\":\"promo123\",\"role\":\"student\",\"full_name\":\"Promo Kid\",\"linked_id\":$K1}" >/dev/null
+PK0=$(tok promo_kid promo123)
+curl -s -X POST $B/auth/change-password -H "Authorization: Bearer $PK0" -H "$C" -d '{"current_password":"promo123","new_password":"promo456"}' >/dev/null
+PK=$(tok promo_kid promo456)
+check "promoted student still sees last year's published card" "$(curl -s "$B/exam/report-card?exam_id=$EX" -H "Authorization: Bearer $PK" | j 'x.cards.length')" 1
+check "promoted student still sees last year's marks" "$(curl -s "$B/exam/my-marks" -H "Authorization: Bearer $PK" | j 'x.length')" 1
 echo; echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
