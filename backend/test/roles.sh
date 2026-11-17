@@ -157,6 +157,12 @@ check "nor replace its attachments" "$(code -X PUT $B/comm/homework/$HWID/attach
 check "the owner can edit their homework" "$(code -X PUT $B/homework/$HWID -H "$(H $T2)" -H "$C" -d '{"title":"Anil HW v2"}')" 200
 check "full-access staff can edit anyone's" "$(code -X PUT $B/homework/$HWID -H "$(H $P)" -H "$C" -d '{"title":"checked"}')" 200
 check "a teacher can't change the exam date sheet" "$(code -X POST $B/exam-schedule -H "$(H $T1)" -H "$C" -d '{"exam_id":1,"class_id":1,"subject":"Maths","date":"2027-03-01"}')" 403
+# Sign-in ignores username case and stray spaces (phones capitalise the first letter).
+check "sign in with a capitalised email username" "$(code -X POST $B/auth/login -H "$C" -d "{\"username\":\" Ac$SFX@Test.Example \",\"password\":\"pass4567\"}")" 200
+check "a username differing only in case is refused" "$(code -X POST $B/users -H "$HA" -H "$C" -d '{"username":"ADMIN","password":"start123","role":"admin","full_name":"x"}')" 409
+# A wrong current password on Change Password is an error message, not a sign-out.
+check "wrong current password gives 400 (stays signed in)" "$(code -X POST $B/auth/change-password -H "$(H $AC)" -H "$C" -d '{"current_password":"nope1234","new_password":"whatever9"}')" 400
+check "and the session still works" "$(code $B/auth/me -H "$(H $AC)")" 200
 # Deleting logins.
 uidof(){ curl -s $B/users -H "$HA" | j "(x.find(u=>u.username==='$1')||{}).id"; }
 check "can't delete your own login" "$(code -X DELETE $B/users/$(uidof admin) -H "$HA")" 400

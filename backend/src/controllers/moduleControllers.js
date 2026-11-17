@@ -637,8 +637,12 @@ exports.users = {
     if (String(password).length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
     const linkProblem = checkLink(role, linked_id);
     if (linkProblem) return res.status(400).json({ error: linkProblem });
+    // Sign-in ignores case, so two usernames differing only in case would be the same login.
+    if (role !== 'teacher' && db.prepare('SELECT 1 FROM users WHERE lower(username) = lower(?)').get(String(username).trim())) {
+      return res.status(409).json({ error: 'That username is already used (usernames are not case-sensitive)' });
+    }
     // A staff login's username is the official email on their staff record (never the personal one).
-    let uname = username;
+    let uname = String(username).trim();
     if (role === 'teacher') {
       const t = db.prepare('SELECT official_email FROM teachers WHERE id = ?').get(linked_id);
       if (!isEmail(t?.official_email)) return res.status(400).json({ error: 'Add the official email on the staff record first; it becomes their username' });
