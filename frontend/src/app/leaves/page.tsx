@@ -5,7 +5,8 @@ import Shell from '@/components/Shell';
 import FileUpload, { FileLinks } from '@/components/FileUpload';
 import { api, fileUrl, getUser, localDate } from '@/lib/api';
 
-const LEAVE_TYPES = [
+// Used only until the school's own Leave Types list (Masters) has loaded.
+const DEFAULT_LEAVE_TYPES = [
   'Casual Leave',
   'Casual Leave Jan_June',
   'Casual Leave July_Dec',
@@ -49,12 +50,22 @@ export default function LeavesPage() {
   const [balances, setBalances] = useState<Record<number, BalanceRow[]>>({});
   const [err, setErr] = useState<string | null>(null);
   const [filters, setFilters] = useState({ status: isAdmin ? 'Pending' : '', type: '', from: '', to: '' });
-  const blankApply = { teacher_id: '', leave_type: LEAVE_TYPES[0], from_date: localDate(), to_date: localDate(), reason: '', attachment: '' };
+  const blankApply = { teacher_id: '', leave_type: DEFAULT_LEAVE_TYPES[0], from_date: localDate(), to_date: localDate(), reason: '', attachment: '' };
   const [applying, setApplying] = useState(!isAdmin);
   const [apply, setApply] = useState(blankApply);
   const [staff, setStaff] = useState<{ id: number; employee_no: string; full_name: string }[]>([]);
   const [ok, setOk] = useState<string | null>(null);
   useEffect(() => { if (isAdmin) api<any[]>('/teachers').then(setStaff).catch(() => {}); }, [isAdmin]);
+  // The leave types the school keeps in Masters → Leave Types (the server accepts only these).
+  const [LEAVE_TYPES, setLeaveTypes] = useState<string[]>(DEFAULT_LEAVE_TYPES);
+  useEffect(() => {
+    api<{ name: string; active?: number }[]>('/masters/leave-types').then(list => {
+      const names = list.filter(x => x.active !== 0).map(x => x.name);
+      if (!names.length) return;
+      setLeaveTypes(names);
+      setApply(a => (names.includes(a.leave_type) ? a : { ...a, leave_type: names[0] }));
+    }).catch(() => {});
+  }, []);
 
   async function submitLeave(e: React.FormEvent) {
     e.preventDefault();
@@ -64,7 +75,7 @@ export default function LeavesPage() {
       const body: Record<string, string> = { ...apply };
       if (!isAdmin) delete body.teacher_id;
       await api('/leaves', { method: 'POST', body: JSON.stringify(body) });
-      setApply({ ...blankApply, teacher_id: apply.teacher_id });
+      setApply({ ...blankApply, leave_type: LEAVE_TYPES[0], teacher_id: apply.teacher_id });
       setOk('Leave application submitted.');
       load();
     } catch (e: any) { setErr(e.message); }

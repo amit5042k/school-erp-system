@@ -30,6 +30,16 @@ export function useMasterNames(type: string) {
   return names;
 }
 
+// The school's own leave types (Masters → Leave Types); the built-in list until they load.
+export function useLeaveTypes() {
+  const [names, setNames] = useState<string[]>(LEAVE_TYPES);
+  useEffect(() => {
+    api<{ name: string; active?: number }[]>('/masters/leave-types')
+      .then(r => { const n = r.filter(x => x.active !== 0).map(x => x.name); if (n.length) setNames(n); }).catch(() => {});
+  }, []);
+  return names;
+}
+
 export function HrHeader({ title, subtitle, crumb = 'Human Resource', links }: {
   title: string; subtitle?: string; crumb?: string; links?: { label: string; href: string }[];
 }) {

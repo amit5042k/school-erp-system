@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api } from '@/lib/api';
-import { Flash, HrHeader, LEAVE_TYPES, SESSIONS, useFlash, useMasterNames } from '../_ui';
+import { Flash, HrHeader, LEAVE_TYPES, SESSIONS, useFlash, useLeaveTypes, useMasterNames } from '../_ui';
 
 type Rule = { id: number; department: string; staff_category: string; session: string; leave_type: string; allowed: number };
 
@@ -11,6 +11,8 @@ export default function DepartmentLeavesPage() {
   const [session, setSession] = useState('');
   const [rows, setRows] = useState<Rule[]>([]);
   const [form, setForm] = useState({ department: '', staff_category: '', leave_type: LEAVE_TYPES[0], allowed: '' });
+  const leaveTypes = useLeaveTypes();
+  useEffect(() => { setForm(f => (leaveTypes.includes(f.leave_type) ? f : { ...f, leave_type: leaveTypes[0] })); }, [leaveTypes]);
   const departments = useMasterNames('departments');
   const categories = useMasterNames('staff-categories');
   const { msg, flash } = useFlash();
@@ -62,7 +64,7 @@ export default function DepartmentLeavesPage() {
               <option value="">All categories</option>{categories.map(d => <option key={d}>{d}</option>)}
             </select></div>
           <div><label className="label">Leave Type</label>
-            <select className="input" value={form.leave_type} onChange={set('leave_type')}>{LEAVE_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
+            <select className="input" value={form.leave_type} onChange={set('leave_type')}>{leaveTypes.map(t => <option key={t}>{t}</option>)}</select></div>
           <div><label className="label">Days Allowed *</label><input className="input" type="number" step="0.5" min={0} max={365} required value={form.allowed} onChange={set('allowed')} /></div>
           <div className="flex items-end"><button className="btn btn-primary">Save Rule</button></div>
         </form>
