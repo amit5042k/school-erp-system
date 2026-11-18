@@ -226,6 +226,8 @@ T2=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"TCK2\"
 check "future-dated TC refused" "$(code -X POST $B/stu/tc -H "$HA" -H "$C" -d "{\"student_id\":$T1,\"reason\":\"Moving\",\"issue_date\":\"2099-01-01\"}")" 400
 check "TC issued" "$(code -X POST $B/stu/tc -H "$HA" -H "$C" -d "{\"student_id\":$T1,\"reason\":\"Moving\",\"tc_no\":\"TC-REG-1\"}")" 201
 check "same TC number in other case refused" "$(code -X POST $B/stu/tc -H "$HA" -H "$C" -d "{\"student_id\":$T2,\"reason\":\"Moving\",\"tc_no\":\"tc-reg-1\"}")" 409
+echo "--- dashboard counts current students only"
+check "dashboard student count = active students" "$(curl -s $B/dashboard -H "$HA" | j 'x.totals.students')" "$(curl -s $B/students -H "$HA" | j "x.filter(s=>(s.status||'active')==='active').length")"
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff

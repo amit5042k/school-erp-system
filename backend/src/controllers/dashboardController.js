@@ -7,8 +7,9 @@ exports.summary = (req, res) => {
   if (role === 'admin' || role === 'teacher') {
     const today = localToday();
     const totals = {
-      students: db.prepare('SELECT COUNT(*) AS c FROM students').get().c,
-      teachers: db.prepare('SELECT COUNT(*) AS c FROM teachers').get().c,
+      // Current strength only: students who left, got a TC or passed out, and former staff, aren't counted.
+      students: db.prepare("SELECT COUNT(*) AS c FROM students WHERE COALESCE(status, 'active') = 'active'").get().c,
+      teachers: db.prepare("SELECT COUNT(*) AS c FROM teachers WHERE COALESCE(status, 'active') = 'active'").get().c,
       classes: db.prepare('SELECT COUNT(*) AS c FROM classes').get().c,
       present_today: db.prepare('SELECT COUNT(*) AS c FROM attendance WHERE date = ? AND status = ?').get(today, 'present').c,
       absent_today: db.prepare('SELECT COUNT(*) AS c FROM attendance WHERE date = ? AND status = ?').get(today, 'absent').c,

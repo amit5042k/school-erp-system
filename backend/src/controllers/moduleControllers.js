@@ -753,14 +753,14 @@ exports.users = {
 exports.reports = (req, res) => {
   const today = localToday();
   res.json({
-    students: db.prepare('SELECT COUNT(*) c FROM students').get().c,
-    teachers: db.prepare('SELECT COUNT(*) c FROM teachers').get().c,
+    students: db.prepare("SELECT COUNT(*) c FROM students WHERE COALESCE(status, 'active') = 'active'").get().c,
+    teachers: db.prepare("SELECT COUNT(*) c FROM teachers WHERE COALESCE(status, 'active') = 'active'").get().c,
     attendance_today: db.prepare(`
       SELECT status, COUNT(*) c FROM attendance WHERE date = ? GROUP BY status
     `).all(today),
     fees_by_status: db.prepare(`SELECT status, SUM(amount) AS total FROM fees GROUP BY status`).all(),
     library_issued: db.prepare("SELECT COUNT(*) c FROM book_issues WHERE status = 'issued'").get().c,
-    transport_students: db.prepare('SELECT COUNT(*) c FROM student_transport').get().c,
+    transport_students: db.prepare("SELECT COUNT(*) c FROM student_transport st JOIN students s ON s.id = st.student_id WHERE COALESCE(s.status, 'active') = 'active'").get().c,
     hostel_occupancy: db.prepare("SELECT COUNT(*) c FROM hostel_allotments WHERE vacated_on IS NULL").get().c,
     low_stock: db.prepare('SELECT sku, name, qty_on_hand, reorder_level FROM inventory_items WHERE qty_on_hand <= reorder_level').all(),
     pending_leaves: db.prepare("SELECT COUNT(*) c FROM staff_leaves WHERE status = 'pending'").get().c,
