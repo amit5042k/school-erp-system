@@ -463,6 +463,25 @@ function balancesAsOn(to) {
     WHERE v.status = 'active' AND (? = '' OR v.date <= ?) GROUP BY al.ledger_id`).all(to || '', to || '').map(r => [r.ledger_id, r.m]));
   return ledgers.map(l => ({ ...l, balance: round2(openingSigned(l) + (moves.get(l.id) || 0)) }));
 }
+// Cash in hand can never be negative: a voucher that would take it below zero on its date or any later day is
+// refused (it means a receipt wasn't entered, or the wrong ledger was chosen). Bank accounts may be overdrawn.
+function cashShortfall(lines, date, exceptId = 0) {
+  for (const x of lines) {
+    if (x.ledger.kind !== 'cash') continue;
+    const delta = round2(lines.filter(y => y.ledger_id === x.ledger_id).reduce((a, y) => a + y.dr - y.cr, 0));
+    if (delta >= 0) continue;
+    const l = ledgerById(x.ledger_id);
+    const before = db.prepare(`SELECT COALESCE(SUM(al.dr - al.cr), 0) AS m FROM acc_lines al JOIN acc_vouchers v ON v.id = al.voucher_id
+      WHERE al.ledger_id = ? AND v.status = 'active' AND v.id != ? AND v.date <= ?`).get(l.id, exceptId, date).m;
+    let bal = round2(openingSigned(l) + before + delta), low = bal;
+    for (const d of db.prepare(`SELECT ROUND(SUM(al.dr - al.cr), 2) AS m FROM acc_lines al JOIN acc_vouchers v ON v.id = al.voucher_id
+      WHERE al.ledger_id = ? AND v.status = 'active' AND v.id != ? AND v.date > ? GROUP BY v.date ORDER BY v.date`).all(l.id, exceptId, date)) {
+      bal = round2(bal + d.m); low = Math.min(low, bal);
+    }
+    if (low < 0) return `${l.name} would go below zero (₹${low.toFixed(2)}). Enter the missing receipts first, or pay from a bank ledger.`;
+  }
+  return null;
+}
 const drcr = (n) => (n >= 0 ? { dr: round2(n), cr: 0 } : { dr: 0, cr: round2(-n) });
 const fmtBal = (n) => `${Math.abs(round2(n)).toFixed(2)} ${n >= 0 ? 'Dr' : 'Cr'}`;
 
@@ -677,6 +696,8 @@ const h = {
   createVoucher(req, res) {
     const b = req.body || {};
     const lines = checkVoucher(b.vtype, b.date, b.lines);
+    const short = cashShortfall(lines, b.date);
+    if (short) throw httpError(400, short);
     if (b.attachment_url && !/^(https?:\/\/|\/api\/files\/)/i.test(b.attachment_url)) throw httpError(400, 'Attachment must be an uploaded file or a web link');
     const id = tx(() => {
       // Only these fields: source_type/source_ref are reserved for automatic posting.
@@ -696,6 +717,8 @@ const h = {
     const date = b.date || cur.date;
     if (fyOf(date) !== cur.fy) throw httpError(400, `The date must stay within financial year ${cur.fy}; cancel and re-enter it instead`);
     const lines = checkVoucher(cur.vtype, date, b.lines || cur.lines);
+    const short = cashShortfall(lines, date, cur.id);
+    if (short) throw httpError(400, short);
     if (b.attachment_url && !/^(https?:\/\/|\/api\/files\/)/i.test(b.attachment_url)) throw httpError(400, 'Attachment must be an uploaded file or a web link');
     tx(() => {
       db.prepare('UPDATE acc_vouchers SET date = ?, narration = ?, reference = ?, attachment_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
