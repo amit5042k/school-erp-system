@@ -102,6 +102,9 @@ app.use((err, req, res, next) => {
     const given = process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 8 ? process.env.ADMIN_PASSWORD : null;
     const password = given || require('crypto').randomBytes(6).toString('base64url');
     if (process.env.SCHOOL_NAME) db.prepare('UPDATE school_settings SET school_name = ? WHERE id = 1').run(process.env.SCHOOL_NAME);
+    // A new school starts in the current academic year (April–March), not whatever year the default was written in.
+    const now = new Date(), y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    db.prepare('UPDATE school_settings SET academic_year = ? WHERE id = 1').run(`${y}-${String((y + 1) % 100).padStart(2, '0')}`);
     db.prepare(`INSERT INTO users (username, password_hash, role, full_name, must_change_password) VALUES ('admin', ?, 'admin', 'School Administrator', 1)`)
       .run(require('bcryptjs').hashSync(password, 10));
     console.log(given ? 'First start: created Super Admin "admin" with ADMIN_PASSWORD (change it at first sign-in).'
