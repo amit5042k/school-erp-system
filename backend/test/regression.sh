@@ -228,6 +228,13 @@ check "TC issued" "$(code -X POST $B/stu/tc -H "$HA" -H "$C" -d "{\"student_id\"
 check "same TC number in other case refused" "$(code -X POST $B/stu/tc -H "$HA" -H "$C" -d "{\"student_id\":$T2,\"reason\":\"Moving\",\"tc_no\":\"tc-reg-1\"}")" 409
 echo "--- dashboard counts current students only"
 check "dashboard student count = active students" "$(curl -s $B/dashboard -H "$HA" | j 'x.totals.students')" "$(curl -s $B/students -H "$HA" | j "x.filter(s=>(s.status||'active')==='active').length")"
+echo "--- a new session starts from last session's installments and fee structure"
+HEAD1=$(curl -s $B/masters/fee-heads -H "$HA" | j 'x[0].name')
+I1=$(curl -s -X POST $B/finance/installments -H "$HA" -H "$C" -d '{"name":"Q1","due_date":"2090-04-10","session":"2090-2091"}' | j 'x.id')
+curl -s -X PUT $B/finance/structure -H "$HA" -H "$C" -d "{\"session\":\"2090-2091\",\"class_id\":$P1,\"rows\":[{\"head\":\"$HEAD1\",\"installment_id\":$I1,\"amount\":2500}]}" >/dev/null
+check "copy into next session" "$(curl -s -X POST $B/finance/structure/copy-session -H "$HA" -H "$C" -d '{"from_session":"2090-2091","to_session":"2091-2092"}' | j 'x.installments+"/"+x.structure_rows')" "1/1"
+check "due date moved a year on" "$(curl -s "$B/finance/installments?session=2091-2092" -H "$HA" | j 'x[0].due_date')" 2091-04-10
+check "copying again adds nothing" "$(curl -s -X POST $B/finance/structure/copy-session -H "$HA" -H "$C" -d '{"from_session":"2090-2091","to_session":"2091-2092"}' | j 'x.installments+x.structure_rows')" 0
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff

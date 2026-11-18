@@ -246,6 +246,38 @@ const h = {
     res.json({ ok: true, copied_rows: src.length });
   },
 
+  // Start a new session from the last one: copy installments (due dates a year later) and every class's fee
+  // structure. Only adds what the new session doesn't have yet, so running it twice or after edits changes nothing.
+  copySession(req, res) {
+    const from = String(req.body.from_session || '').trim(), to = String(req.body.to_session || '').trim();
+    if (!from || !to) throw httpError(400, 'Choose the session to copy from and the session to copy to');
+    if (from === to) throw httpError(400, 'Choose two different sessions');
+    const insts = db.prepare('SELECT * FROM fin_installments WHERE session = ? ORDER BY sort_order, id').all(from);
+    if (!insts.length) throw httpError(400, `There are no installments in ${from} to copy`);
+    const yearLater = (d) => {
+      const [y, m, day] = d.split('-').map(Number);
+      const last = new Date(Date.UTC(y + 1, m, 0)).getUTCDate();
+      return `${y + 1}-${String(m).padStart(2, '0')}-${String(Math.min(day, last)).padStart(2, '0')}`;
+    };
+    const out = { installments: 0, structure_rows: 0 };
+    db.transaction(() => {
+      const map = new Map();
+      for (const i of insts) {
+        let t = db.prepare('SELECT id FROM fin_installments WHERE session = ? AND name = ?').get(to, i.name);
+        if (!t) {
+          t = { id: db.prepare('INSERT INTO fin_installments (session, name, due_date, sort_order) VALUES (?, ?, ?, ?)').run(to, i.name, yearLater(i.due_date), i.sort_order).lastInsertRowid };
+          out.installments++;
+        }
+        map.set(i.id, t.id);
+      }
+      const ins = db.prepare(`INSERT OR IGNORE INTO fin_structure (session, class_id, head, installment_id, amount) VALUES (?, ?, ?, ?, ?)`);
+      for (const r of db.prepare('SELECT * FROM fin_structure WHERE session = ?').all(from)) {
+        if (map.has(r.installment_id)) out.structure_rows += ins.run(to, r.class_id, r.head, map.get(r.installment_id), r.amount).changes;
+      }
+    })();
+    res.json({ ok: true, ...out });
+  },
+
   /* Generate fee demands from the structure */
   generate(req, res) {
     const session = req.body.session || currentSession();
@@ -738,6 +770,7 @@ function register(router) {
   router.get('/finance/structure', ...admin, safe(wrap(h.getStructure)));
   router.put('/finance/structure', ...admin, safe(wrap(h.putStructure)));
   router.post('/finance/structure/copy', ...admin, safe(wrap(h.copyStructure)));
+  router.post('/finance/structure/copy-session', ...admin, safe(wrap(h.copySession)));
   router.post('/finance/generate', ...admin, safe(wrap(h.generate)));
 
   router.get('/finance/student-dues/:studentId', auth, safe(wrap(h.studentDues)));

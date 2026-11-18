@@ -49,6 +49,37 @@ export default function InstallmentsPage({ searchParams }: { searchParams: { tab
 
 type Flasher = (t: string, ok?: boolean) => void;
 
+// "2026-2027" → "2025-2026" (also "2026-27" → "2025-26").
+function previousSession(sess: string) {
+  const m = sess.match(/^(\d{4})-(\d{2}|\d{4})$/);
+  if (!m) return '';
+  const y = Number(m[1]) - 1;
+  return `${y}-${m[2].length === 2 ? String((y + 1) % 100).padStart(2, '0') : y + 1}`;
+}
+
+// A new session starts from the last one's installments and fee structure, instead of typing them all again.
+function CopySession({ session, reload, flash }: { session: string; reload: () => void; flash: Flasher }) {
+  const [from, setFrom] = useState(previousSession(session));
+  useEffect(() => setFrom(previousSession(session)), [session]);
+  const [busy, setBusy] = useState(false);
+  async function copy() {
+    if (!confirm(`Copy installments (due dates one year later) and every class's fee structure from ${from} into ${session}? Anything ${session} already has is kept.`)) return;
+    setBusy(true);
+    try {
+      const r = await api<{ installments: number; structure_rows: number }>('/finance/structure/copy-session', { method: 'POST', body: JSON.stringify({ from_session: from, to_session: session }) });
+      flash(`Copied ${r.installments} installment(s) and ${r.structure_rows} fee structure row(s) from ${from}. Check the amounts and due dates, then generate fee demands.`);
+      reload();
+    } catch (e: any) { flash(e.message, false); } finally { setBusy(false); }
+  }
+  return (
+    <div className="flex flex-wrap items-end gap-2 mb-4 p-3 rounded bg-brand-50 border border-brand-100">
+      <div><label className="label">Copy installments and fee structure from session</label>
+        <input className="input w-32" value={from} onChange={e => setFrom(e.target.value)} placeholder="2025-2026" /></div>
+      <button type="button" className="btn bg-gray-200" disabled={!from || busy} onClick={copy}>{busy ? 'Copying…' : `Copy into ${session}`}</button>
+    </div>
+  );
+}
+
 function Installments({ session, insts, reload, flash }: { session: string; insts: Inst[]; reload: () => void; flash: Flasher }) {
   const [draft, setDraft] = useState({ name: '', due_date: '' });
   const [edit, setEdit] = useState<Record<number, Inst>>({});
@@ -74,6 +105,7 @@ function Installments({ session, insts, reload, flash }: { session: string; inst
         <div><label className="label">Due Date *</label><input className="input" type="date" required value={draft.due_date} onChange={e => setDraft({ ...draft, due_date: e.target.value })} /></div>
         <div className="flex items-end"><button className="btn btn-primary">Add Installment</button></div>
       </form>
+      {session && <CopySession session={session} reload={reload} flash={flash} />}
       <table className="table">
         <thead><tr><th>Order</th><th>Installment</th><th>Due Date</th><th>Fees Generated</th><th></th></tr></thead>
         <tbody>
