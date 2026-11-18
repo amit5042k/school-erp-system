@@ -25,6 +25,7 @@ run() {
 export B="localhost:$PORT/api" API="http://localhost:$PORT/api"
 run "Regression (access control, validation, data integrity)" bash test/regression.sh
 run "Every report for every role" node test/reports.js
+run "Licensing (licence server and a school install)" env ISSUER_PORT=$((PORT + 1)) CLIENT_PORT=$((PORT + 2)) bash test/licence.sh
 # Last: it ends by deleting the demo staff logins the other suites sign in with.
 run "Staff roles and permissions" bash test/roles.sh
 

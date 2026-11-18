@@ -180,6 +180,29 @@ Deploying a new version, or adding and removing features, changes the code only:
 - Sign-in is rate-limited on failed attempts (10 per account and 100 per network per 15 minutes).
 - Put the backend behind HTTPS; `helmet` and rate limiting are already wired.
 
+## Licensing (selling the ERP to schools)
+
+Every school install needs a licence from you, tied to the school's **registered email**.
+
+**Your licence server.** On your own install (e.g. nextgenos.in) set the environment variable `LICENSE_ISSUER=true`
+(Hostinger: Websites › your site › Node.js › Environment variables) and redeploy. That install is never limited and gets
+a **Licences** page (Super Admin only, via Licence › Licences) where you add a licence per school: registered email,
+school name, web address (optional; then the licence only works there), plan name and modules, maximum students,
+valid-until date, and Active / Trial / Suspended. The signing key is created once and kept in your database, so keep
+your backups: without it no school's licence can be verified.
+
+**Each school's install** runs a **30-day free trial** from its first start (a banner shows the days left). The school's
+Super Admin opens **Licence** in the menu and enters the registered email; the install checks it with your licence
+server (`LICENSE_SERVER_URL`, default `https://nextgenos.in`) every 10 minutes and shows the plan, student limit and
+expiry. If your server can't be reached, the last licence keeps working for 7 days.
+
+When the trial ends, or a licence expires, is suspended or can't be verified, the school's ERP becomes **read-only**:
+everything stays saved and visible, sign-in works, but nothing can be added or changed until the licence is active
+again. Modules outside the plan are closed, and students beyond the limit can't be added. Renewing (a later
+valid-until date, or Active again) takes effect within 10 minutes, or at once with **Check now** on the school's
+Licence page. The Licences page also shows each install's last check, web address and number of students, and checks
+from emails that have no licence (schools still on their trial).
+
 ## Staff roles and permissions
 
 Staff logins have a role: Principal, Academic Coordinator, IT Head, Office Superintendent, Clerk, Accountant,

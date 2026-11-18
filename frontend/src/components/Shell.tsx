@@ -75,6 +75,7 @@ const NAV: NavItem[] = [
   { label: 'Roles & Permissions',   href: '/roles',                 icon: '🛡', roles: ADMIN },
   { label: 'Bulk Import',           href: '/imports',               icon: '⇪', roles: ADMIN },
   { label: 'Backups',               href: '/backups',               icon: '💾', roles: ADMIN },
+  { label: 'Licence',               href: '/licence',               icon: '🔑', roles: ADMIN },
   { label: 'Reports',               href: '/reports',               icon: '📊' },
 ];
 
