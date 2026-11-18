@@ -609,7 +609,7 @@ registerReport({
   ],
   run: (p) => db.prepare(`
     SELECT * FROM (
-      SELECT 'Admission' AS kind, s.admission_no AS number, COALESCE(s.admission_date, date(s.created_at)) AS date, s.full_name AS name,
+      SELECT 'Admission' AS kind, s.admission_no AS number, COALESCE(s.admission_date, date(s.created_at, 'localtime')) AS date, s.full_name AS name,
         c.name || ' ' || c.section AS class, s.class_id, s.gender, s.father_name, s.contact AS phone, COALESCE(s.status, 'active') AS status
       FROM students s LEFT JOIN classes c ON c.id = s.class_id
       UNION ALL
@@ -654,7 +654,7 @@ registerReport({
   ],
   run: (p) => db.prepare(`
     SELECT * FROM (
-      SELECT 'Admission' AS kind, COALESCE(s.admission_date, date(s.created_at)) AS date, s.admission_no, s.full_name,
+      SELECT 'Admission' AS kind, COALESCE(s.admission_date, date(s.created_at, 'localtime')) AS date, s.admission_no, s.full_name,
         c.name || ' ' || c.section AS class, s.class_id, s.gender, s.father_name, s.session AS detail
       FROM students s LEFT JOIN classes c ON c.id = s.class_id
       UNION ALL
@@ -754,7 +754,7 @@ registerReport({
       LEFT JOIN stu_registrations r ON r.prospectus_id = p.id
       LEFT JOIN (SELECT id, admission_no, prospectus_id FROM students) adm
         ON adm.id = (SELECT COALESCE(r.student_id, (SELECT id FROM students WHERE prospectus_id = p.id LIMIT 1)))
-      WHERE COALESCE(p.date, date(p.created_at)) BETWEEN ? AND ?
+      WHERE COALESCE(p.date, date(p.created_at, 'localtime')) BETWEEN ? AND ?
     ) WHERE ? = '' OR stage = ? ORDER BY date DESC, prospectus_no DESC`).all(p.from, p.to, p.stage, p.stage),
 });
 

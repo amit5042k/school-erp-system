@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
-import { api, fmtDateTime, getToken } from '@/lib/api';
+import { api, fmtDateTime, getToken, localDate } from '@/lib/api';
 
 type Backup = { name: string; size: number; created: string };
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000/api';
@@ -26,7 +26,7 @@ export default function BackupsPage() {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Backup failed (${res.status})`);
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
-      a.href = url; a.download = `school-erp-backup-${new Date().toISOString().slice(0, 10)}.sqlite`; a.click();
+      a.href = url; a.download = `school-erp-backup-${localDate()}.sqlite`; a.click();
       URL.revokeObjectURL(url);
       load();
     } catch (e: any) { setErr(e.message); }
