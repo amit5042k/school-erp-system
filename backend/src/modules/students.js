@@ -336,6 +336,7 @@ const h = {
     if (s.status === 'tc_issued') return res.status(400).json({ error: 'A TC has been issued for this student. Cancel the TC to change the status.' });
     const date = req.body.date || today();
     if (!isDate(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    if (date > today()) return res.status(400).json({ error: 'The date cannot be in the future' });
     const reason = String(req.body.reason || '').trim();
     if (status !== 'active' && !reason) return res.status(400).json({ error: 'Please give a reason' });
     const result = db.transaction(() => applyStatus(s, status, reason, date, req.user.id))();
@@ -402,6 +403,7 @@ const h = {
     for (const [v, label] of [[issue, 'Issue date'], [leaving, 'Leaving date'], [b.application_date, 'Application date']]) {
       if (v && !isDate(v)) return res.status(400).json({ error: `${label} must be YYYY-MM-DD` });
     }
+    if (issue > today()) return res.status(400).json({ error: 'Issue date cannot be in the future' });
     if (leaving > issue) return res.status(400).json({ error: 'Leaving date cannot be after the issue date' });
     if (b.application_date && b.application_date > issue) return res.status(400).json({ error: 'Application date cannot be after the issue date' });
     const reason = String(b.reason || '').trim();
@@ -411,6 +413,7 @@ const h = {
     }
     if (num(b.days_present) > num(b.working_days)) return res.status(400).json({ error: 'Days present cannot exceed working days' });
     const tcNo = String(b.tc_no || '').trim() || nextTcNo();
+    if (db.prepare('SELECT 1 FROM stu_tc WHERE lower(tc_no) = lower(?)').get(tcNo)) return res.status(409).json({ error: `TC number ${tcNo} has already been used` });
     const out = db.transaction(() => {
       const info = db.prepare(`INSERT INTO stu_tc (tc_no, student_id, application_date, issue_date, leaving_date, last_class, qualified_for_promotion,
         dues_paid, working_days, days_present, conduct, reason, nationality, remarks, previous_status, issued_by)

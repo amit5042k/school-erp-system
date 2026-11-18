@@ -220,6 +220,12 @@ check "payment beyond cash in hand refused" "$(code -X POST $B/accounts/vouchers
 echo "--- staff attendance: a double tap on arrival isn't a punch-out"
 curl -s -X POST $B/hr/biometric/import -H "$HA" -H "$C" -d '{"csv":"JOIN1,2026-11-02,08:00\nJOIN1,2026-11-02,08:00:20"}' >/dev/null
 check "double tap stays Present" "$(curl -s "$B/hr/staff-attendance?date=2026-11-02" -H "$HA" | j "(x.rows||x).find(r=>r.employee_no==='JOIN1').status")" present
+echo "--- transfer certificates"
+T1=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"TCK1\",\"full_name\":\"TC Kid\",\"class_id\":$P1}" | j 'x.id')
+T2=$(curl -s -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"TCK2\",\"full_name\":\"TC Kid 2\",\"class_id\":$P1}" | j 'x.id')
+check "future-dated TC refused" "$(code -X POST $B/stu/tc -H "$HA" -H "$C" -d "{\"student_id\":$T1,\"reason\":\"Moving\",\"issue_date\":\"2099-01-01\"}")" 400
+check "TC issued" "$(code -X POST $B/stu/tc -H "$HA" -H "$C" -d "{\"student_id\":$T1,\"reason\":\"Moving\",\"tc_no\":\"TC-REG-1\"}")" 201
+check "same TC number in other case refused" "$(code -X POST $B/stu/tc -H "$HA" -H "$C" -d "{\"student_id\":$T2,\"reason\":\"Moving\",\"tc_no\":\"tc-reg-1\"}")" 409
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff
