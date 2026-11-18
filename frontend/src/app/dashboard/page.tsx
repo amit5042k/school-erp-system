@@ -162,7 +162,7 @@ export default function DashboardPage() {
 
           <div className="card p-4 mt-4">
             <h3 className="font-semibold text-brand-700 mb-2">Fee Status</h3>
-            <table className="table">
+            <div className="overflow-x-auto"><table className="table">
               <thead><tr><th>Term</th><th>Amount</th><th>Paid</th><th>Status</th><th>Due</th></tr></thead>
               <tbody>
                 {data.fees.map((f, i) => (
@@ -176,7 +176,7 @@ export default function DashboardPage() {
                 ))}
                 {!data.fees.length && <tr><td colSpan={5} className="text-sm text-gray-500 py-3">No fee records.</td></tr>}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           <div className="card p-4 mt-4">

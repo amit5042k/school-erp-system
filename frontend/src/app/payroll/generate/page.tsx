@@ -25,7 +25,7 @@ export default function GenerateSlipsPage() {
     setErr(null); setResult(null);
     try {
       setResult(await api('/pay/generate', { method: 'POST', body: JSON.stringify({
-        month, teacher_ids: [...picked], entries: [...picked].map(id => ({ teacher_id: id, lop_days: lop[id] || 0 })),
+        month, teacher_ids: [...picked], entries: [...picked].map(id => ({ teacher_id: id, lop_days: lop[id] ?? '' })),
       }) }));
     } catch (e: any) { setErr(e.message); }
   }

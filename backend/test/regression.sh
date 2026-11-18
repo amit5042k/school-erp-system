@@ -206,6 +206,11 @@ echo "--- reports that need a choice show their filters first"
 check "report without its required choice still returns filters" "$(curl -s $B/report/fee-student-ledger -H "$HA" | j "x.params.length>0&&x.rows.length===0&&/Choose Student/.test(x.message)")" true
 echo "--- right password, wrong Login As"
 check "says which Login As to choose" "$(curl -s -X POST $B/auth/login -H "$C" -d '{"username":"ADM2025001","password":"student123","role":"admin"}' | j 'x.code')" WRONG_LOGIN_AS
+echo "--- payroll: staff who join mid-month are paid from their joining date"
+JT=$(curl -s -X POST $B/hr/employees -H "$HA" -H "$C" -d '{"employee_no":"JOIN1","full_name":"New Joiner","joining_date":"2026-06-11"}' | j 'x.id')
+curl -s -X PUT $B/pay/structure/$JT -H "$HA" -H "$C" -d '{"basic":30000,"pf_applicable":false,"esi_applicable":false}' >/dev/null
+check "joiner's first slip is prorated" "$(curl -s -X POST $B/pay/generate -H "$HA" -H "$C" -d "{\"month\":\"2026-06\",\"teacher_ids\":[$JT],\"entries\":[{\"teacher_id\":$JT,\"lop_days\":\"\"}]}" | j 'x.total_net')" 20000
+check "no slip before joining" "$(curl -s -X POST $B/pay/generate -H "$HA" -H "$C" -d "{\"month\":\"2026-05\",\"teacher_ids\":[$JT]}" | j 'x.created')" 0
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff

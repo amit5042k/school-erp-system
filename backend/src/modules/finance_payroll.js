@@ -1,5 +1,5 @@
 // Payroll: statutory settings (PF/ESI), salary structure, bulk slip generation, salary slips, Form 16, reports.
-const { db, ROLES, auth, role, safe, num, badUrl, today, registerReport } = require('./_kit');
+const { db, ROLES, auth, role, safe, num, badUrl, today, isDate, registerReport } = require('./_kit');
 const { round2, httpError, sendError } = require('../controllers/feesController');
 
 const admin = [auth, role(...ROLES.ADMIN)];
@@ -149,7 +149,7 @@ const h = {
     if (!isMonth(month)) throw httpError(400, 'month must be YYYY-MM');
     const lop = Object.fromEntries((req.body.entries || []).map(e => [Number(e.teacher_id), e.lop_days]));
     const ids = Array.isArray(req.body.teacher_ids) && req.body.teacher_ids.length ? req.body.teacher_ids.map(Number) : null;
-    const people = db.prepare(`SELECT s.*, t.full_name FROM pay_structure s JOIN teachers t ON t.id = s.teacher_id
+    const people = db.prepare(`SELECT s.*, t.full_name, t.joining_date FROM pay_structure s JOIN teachers t ON t.id = s.teacher_id
       WHERE COALESCE(t.status, 'active') = 'active'`).all().filter(p => !ids || ids.includes(p.teacher_id));
     if (!people.length) throw httpError(400, 'No active staff with a salary structure. Set salaries in Salary Structure first.');
     const st = settings(), dim = daysIn(month);
@@ -157,7 +157,12 @@ const h = {
     db.transaction(() => {
       for (const p of people) {
         if (db.prepare('SELECT 1 FROM payroll WHERE teacher_id = ? AND month = ?').get(p.teacher_id, month)) { out.already_existed++; continue; }
-        const l = lop[p.teacher_id] === '' || lop[p.teacher_id] == null ? 0 : num(lop[p.teacher_id]);
+        // Someone who joined during the month isn't paid for the days before they joined, unless the office has
+        // entered the loss-of-pay days for them itself.
+        const joined = isDate(p.joining_date) ? p.joining_date : null;
+        if (joined && joined.slice(0, 7) > month) { out.skipped.push(`${p.full_name}: joins on ${joined}, after this month`); continue; }
+        const preJoin = joined && joined.slice(0, 7) === month ? Number(joined.slice(8, 10)) - 1 : 0;
+        const l = lop[p.teacher_id] === '' || lop[p.teacher_id] == null ? preJoin : num(lop[p.teacher_id]);
         if (!(l >= 0 && l <= dim)) throw httpError(400, `Loss-of-pay days for ${p.full_name} must be between 0 and ${dim}`);
         const f = (dim - l) / dim;
         const e = { basic: round2(p.basic * f), da: round2(p.da * f), hra: round2(p.hra * f), conveyance: round2(p.conveyance * f), other_allowance: round2(p.other_allowance * f) };
@@ -255,7 +260,7 @@ registerReport({
     const by = new Map();
     for (const r of rows) {
       const k = r.teacher_id;
-      if (!by.has(k)) by.set(k, { employee_no: r.employee_no, teacher_name: r.teacher_name, designation: r.designation, gross_total: 0, deduction_total: 0, net_total: 0 });
+      if (!by.has(k)) by.set(k, { employee_no: r.employee_no, teacher_name: r.teacher_name, designation: r.designation, ...Object.fromEntries(months.map((_, i) => [`m${i}`, 0])), gross_total: 0, deduction_total: 0, net_total: 0 });
       const o = by.get(k);
       o[`m${months.indexOf(r.month)}`] = r.net_pay;
       o.gross_total = round2(o.gross_total + r.basic + r.allowances);
