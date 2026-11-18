@@ -211,6 +211,8 @@ JT=$(curl -s -X POST $B/hr/employees -H "$HA" -H "$C" -d '{"employee_no":"JOIN1"
 curl -s -X PUT $B/pay/structure/$JT -H "$HA" -H "$C" -d '{"basic":30000,"pf_applicable":false,"esi_applicable":false}' >/dev/null
 check "joiner's first slip is prorated" "$(curl -s -X POST $B/pay/generate -H "$HA" -H "$C" -d "{\"month\":\"2026-06\",\"teacher_ids\":[$JT],\"entries\":[{\"teacher_id\":$JT,\"lop_days\":\"\"}]}" | j 'x.total_net')" 20000
 check "no slip before joining" "$(curl -s -X POST $B/pay/generate -H "$HA" -H "$C" -d "{\"month\":\"2026-05\",\"teacher_ids\":[$JT]}" | j 'x.created')" 0
+echo "--- admission numbers differing only in case or spaces are refused"
+check "same admission no in other case refused" "$(code -X POST $B/students -H "$HA" -H "$C" -d "{\"admission_no\":\"sib1 \",\"full_name\":\"Dup\",\"class_id\":$P1}")" 409
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff

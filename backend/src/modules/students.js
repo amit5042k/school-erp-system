@@ -198,6 +198,14 @@ function saveCustomValues(studentId, values) {
   return null;
 }
 
+// Admission numbers are also student usernames, and sign-in ignores case and spaces: never allow two that
+// differ only in that way (existing records are left as they are).
+for (const ev of ['INSERT', 'UPDATE OF admission_no']) {
+  db.exec(`CREATE TRIGGER IF NOT EXISTS students_adm_unique_${ev.startsWith('I') ? 'ins' : 'upd'} BEFORE ${ev} ON students
+    WHEN EXISTS (SELECT 1 FROM students WHERE lower(trim(admission_no)) = lower(trim(NEW.admission_no)) AND id IS NOT NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'UNIQUE constraint failed: students.admission_no'); END`);
+}
+
 /* ---------- Status and logins ---------- */
 const STATUSES = ['active', 'inactive', 'left', 'tc_issued', 'passed_out'];
 
