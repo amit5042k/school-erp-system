@@ -33,9 +33,9 @@ export default function SalarySlipPage({ params }: { params: { id: string } }) {
       </div>
       {err && <div className="text-red-700 text-sm">{err}</div>}
       {s && (
-        <div className="card p-6 max-w-3xl mx-auto text-sm">
+        <div className="card p-3 sm:p-6 max-w-3xl mx-auto text-sm">
           <Letterhead school={s.school} title={`Salary Slip — ${monthName(s.month)}`} />
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-6 gap-y-1 mb-4">
             <div><span className="text-gray-500">Employee:</span> <b>{s.teacher_name}</b></div>
             <div><span className="text-gray-500">Employee No:</span> {s.employee_no}</div>
             <div><span className="text-gray-500">Designation:</span> {s.designation || '—'}</div>
@@ -47,7 +47,7 @@ export default function SalarySlipPage({ params }: { params: { id: string } }) {
             {s.days_in_month && <div><span className="text-gray-500">Paid Days:</span> {s.days_in_month - s.lop_days} / {s.days_in_month}{s.lop_days ? ` (LOP ${s.lop_days})` : ''}</div>}
             <div><span className="text-gray-500">Status:</span> {s.status === 'paid' ? `Paid${s.paid_on ? ` on ${fmtDate(s.paid_on)}` : ''}` : 'Pending'}</div>
           </div>
-          <table className="w-full border text-sm">
+          <div className="overflow-x-auto"><table className="w-full border text-xs sm:text-sm print:text-sm">
             <thead><tr className="bg-gray-100">
               <th className="border px-2 py-1 text-left">Earnings</th><th className="border px-2 py-1 text-right">Amount</th>
               <th className="border px-2 py-1 text-left">Deductions</th><th className="border px-2 py-1 text-right">Amount</th>
@@ -66,7 +66,7 @@ export default function SalarySlipPage({ params }: { params: { id: string } }) {
                 <td className="border px-2 py-1">Total Deductions</td><td className="border px-2 py-1 text-right">{fmtMoney(s.deductions)}</td>
               </tr>
             </tbody>
-          </table>
+          </table></div>
           <div className="mt-3 text-base">Net Pay: <b>{fmtMoney(s.net_pay)}</b></div>
           <div className="italic">{amountInWords(s.net_pay)}</div>
           {s.has_details && (s.employer_pf + s.employer_eps + s.employer_esi) > 0 && (

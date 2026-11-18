@@ -77,7 +77,7 @@ export default function StopsPage() {
       <p className="text-sm text-gray-500 mb-4">Place each stop on the map so parents see it and get an &ldquo;arriving&rdquo; alert when the bus is about 600 m away. Stop names must match the pickup stop on each student&apos;s transport record.</p>
       <Flash msg={msg} />
       {error && <div className="text-red-700 text-sm mb-2">{error}</div>}
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 [&>*]:min-w-0">
         <div className="card p-4 text-sm">
           <div className="flex gap-2 items-end mb-3">
             <div className="flex-1"><label className="label">Route</label>
@@ -86,7 +86,7 @@ export default function StopsPage() {
               </select></div>
             <button className="btn bg-gray-200" onClick={() => setStops(l => [...l, { name: '', lat: null, lng: null }])}>+ Stop</button>
           </div>
-          <table className="table text-sm">
+          <div className="overflow-x-auto"><table className="table text-sm">
             <thead><tr><th></th><th>Stop</th><th>Latitude</th><th>Longitude</th><th></th></tr></thead>
             <tbody>
               {stops.map((s, i) => (
@@ -103,7 +103,7 @@ export default function StopsPage() {
               ))}
               {!stops.length && <tr><td colSpan={5} className="text-center py-4 text-gray-500">No stops on this route. Add them here or on the route in Transport.</td></tr>}
             </tbody>
-          </table>
+          </table></div>
           {routeId && <div className="text-right mt-3"><button className="btn btn-primary" onClick={save}>Save Stops</button></div>}
         </div>
         <div>{el}{picking != null && <div className="text-xs text-amber-700 mt-1">Click on the map to place &ldquo;{stops[picking]?.name || 'this stop'}&rdquo;.</div>}</div>

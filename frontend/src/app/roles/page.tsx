@@ -88,7 +88,7 @@ export default function RolesPage() {
 
       {msg && <div className={`text-sm rounded px-3 py-2 mb-3 border ${msg.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>{msg.text}</div>}
 
-      <div className="grid lg:grid-cols-[16rem_1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[16rem_1fr] gap-4 [&>*]:min-w-0">
         <div className="space-y-3">
           <div className="card p-2">
             {roles.map(r => (
