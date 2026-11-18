@@ -11,6 +11,12 @@ db.exec(`CREATE TRIGGER IF NOT EXISTS trg_users_password_changed AFTER UPDATE OF
   WHEN NEW.password_hash IS NOT OLD.password_hash
   BEGIN UPDATE users SET password_changed_at = CAST(strftime('%s', 'now') AS INTEGER) WHERE id = NEW.id; END;`);
 
+// Sign-in ignores case and spaces in usernames, so two logins may never differ only in that way.
+for (const ev of ['INSERT', 'UPDATE OF username']) {
+  db.exec(`CREATE TRIGGER IF NOT EXISTS users_username_unique_${ev.startsWith('I') ? 'ins' : 'upd'} BEFORE ${ev} ON users
+    WHEN EXISTS (SELECT 1 FROM users WHERE lower(trim(username)) = lower(trim(NEW.username)) AND id IS NOT NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'UNIQUE constraint failed: users.username'); END`);
+}
 const loadUser = db.prepare('SELECT id, username, role, role_key, full_name, linked_id, active, must_change_password, blocked_reason, password_changed_at FROM users WHERE id = ?');
 
 // Reachable while a password change is pending, so the user can see who they are and change it.
