@@ -217,6 +217,9 @@ echo "--- accounts: cash in hand can't go below zero"
 CASHL=$(curl -s $B/accounts/ledgers -H "$HA" | j "x.find(l=>l.kind==='cash').id"); EXPL=$(curl -s $B/accounts/ledgers -H "$HA" | j "x.find(l=>l.nature==='expense').id")
 TD=$(node -e "console.log(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}))")
 check "payment beyond cash in hand refused" "$(code -X POST $B/accounts/vouchers -H "$HA" -H "$C" -d "{\"vtype\":\"payment\",\"date\":\"$TD\",\"lines\":[{\"ledger_id\":$EXPL,\"dr\":99999999},{\"ledger_id\":$CASHL,\"cr\":99999999}]}")" 400
+echo "--- staff attendance: a double tap on arrival isn't a punch-out"
+curl -s -X POST $B/hr/biometric/import -H "$HA" -H "$C" -d '{"csv":"JOIN1,2026-11-02,08:00\nJOIN1,2026-11-02,08:00:20"}' >/dev/null
+check "double tap stays Present" "$(curl -s "$B/hr/staff-attendance?date=2026-11-02" -H "$HA" | j "(x.rows||x).find(r=>r.employee_no==='JOIN1').status")" present
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff

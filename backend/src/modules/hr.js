@@ -159,6 +159,10 @@ function eachDate(from, to, fn) {
 
 const rules = () => db.prepare('SELECT * FROM hr_attendance_rules WHERE id = 1').get();
 
+// A second tap soon after arriving (machines often need two) isn't leaving: only a punch 30+ minutes after the
+// first counts as the out time.
+const outTime = (firstIn, last) => (last && mins(last) - mins(firstIn) >= 30 ? last : null);
+
 // Status from first-in / last-out using the attendance rule.
 function statusFromPunches(firstIn, lastOut, r) {
   const start = mins(r.office_start), inM = mins(firstIn);
@@ -331,7 +335,7 @@ function recompute(teacherId, date, overwrite, userId) {
   const existing = db.prepare('SELECT source FROM hr_staff_attendance WHERE teacher_id = ? AND date = ?').get(teacherId, date);
   if (existing && existing.source === 'manual' && !overwrite) return false;
   const firstIn = p[0].punch_time.slice(0, 5);
-  const lastOut = p.length > 1 ? p[p.length - 1].punch_time.slice(0, 5) : null;
+  const lastOut = outTime(firstIn, p.length > 1 ? p[p.length - 1].punch_time.slice(0, 5) : null);
   const { status, late_minutes } = statusFromPunches(firstIn, lastOut, rules());
   db.prepare(`
     INSERT INTO hr_staff_attendance (teacher_id, date, status, in_time, out_time, remarks, source, marked_by, updated_at)
@@ -796,7 +800,7 @@ registerReport({
       WHERE p.punch_date BETWEEN ? AND ? AND (? = '' OR p.teacher_id = ?)
       GROUP BY p.teacher_id, p.punch_date ORDER BY p.punch_date DESC, t.full_name`).all(p.from, p.to, p.teacher_id, p.teacher_id)
       .map(x => {
-        const firstIn = x.first.slice(0, 5), lastOut = x.punches > 1 ? x.last.slice(0, 5) : null;
+        const firstIn = x.first.slice(0, 5), lastOut = outTime(firstIn, x.punches > 1 ? x.last.slice(0, 5) : null);
         const s = statusFromPunches(firstIn, lastOut, r);
         return {
           punch_date: x.punch_date, employee_no: x.employee_no, full_name: x.full_name, first_in: firstIn, last_out: lastOut || '—',
