@@ -235,6 +235,7 @@ curl -s -X PUT $B/finance/structure -H "$HA" -H "$C" -d "{\"session\":\"2090-209
 check "copy into next session" "$(curl -s -X POST $B/finance/structure/copy-session -H "$HA" -H "$C" -d '{"from_session":"2090-2091","to_session":"2091-2092"}' | j 'x.installments+"/"+x.structure_rows')" "1/1"
 check "due date moved a year on" "$(curl -s "$B/finance/installments?session=2091-2092" -H "$HA" | j 'x[0].due_date')" 2091-04-10
 check "copying again adds nothing" "$(curl -s -X POST $B/finance/structure/copy-session -H "$HA" -H "$C" -d '{"from_session":"2090-2091","to_session":"2091-2092"}' | j 'x.installments+x.structure_rows')" 0
+check "department leave rules copy to a new session" "$(curl -s -X POST $B/hr/department-leaves -H "$HA" -H "$C" -d "{\"department\":\"Science\",\"session\":\"2090-2091\",\"leave_type\":\"$(curl -s $B/masters/leave-types -H "$HA" | j 'x[0].name')\",\"allowed\":12}" >/dev/null; curl -s -X POST $B/hr/department-leaves/copy -H "$HA" -H "$C" -d '{"from_session":"2090-2091","to_session":"2091-2092"}' | j 'x.copied')" 1
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff

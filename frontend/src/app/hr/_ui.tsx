@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, sessionList } from '@/lib/api';
 
 export type Msg = { ok: boolean; text: string } | null;
 
@@ -68,4 +68,10 @@ export const LEAVE_TYPES = [
   'Earned Leave', 'Leave without Pay', 'Medical Leave', 'On Duty',
 ];
 
-export const SESSIONS = ['2024-25', '2025-26', '2026-27', '2027-28'];
+// Sessions around the school's current one, written the way the school writes it (2026-27 or 2026-2027), so
+// rules saved here match the session the leave balances use.
+export function useSessions() {
+  const [list, setList] = useState<string[]>([]);
+  useEffect(() => { api<{ academic_year?: string }>('/settings').then(s => setList(sessionList(s?.academic_year))).catch(() => {}); }, []);
+  return list;
+}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api, fmtDate, getUser } from '@/lib/api';
-import { Flash, HrHeader, LEAVE_TYPES, SESSIONS, useFlash, useLeaveTypes } from '../_ui';
+import { Flash, HrHeader, LEAVE_TYPES, useSessions, useFlash, useLeaveTypes } from '../_ui';
 
 type Extra = { id: number; teacher_id: number; teacher_name: string; employee_no: string; session: string; leave_type: string;
   days: number; reason: string; granted_by_name: string | null; created_at: string };
@@ -37,7 +37,8 @@ export default function ExtraLeavesPage() {
     try { await api(`/hr/extra-leaves/${x.id}`, { method: 'DELETE' }); load(); } catch (ex: any) { flash(ex.message, false); }
   }
 
-  const sessions = SESSIONS.includes(session) ? SESSIONS : [session, ...SESSIONS];
+  const allSessions = useSessions();
+  const sessions = allSessions.includes(session) || !session ? allSessions : [session, ...allSessions];
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
 
   return (

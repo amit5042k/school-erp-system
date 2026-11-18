@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Shell from '@/components/Shell';
 import { api } from '@/lib/api';
-import { Flash, HrHeader, LEAVE_TYPES, SESSIONS, useFlash, useLeaveTypes, useMasterNames } from '../_ui';
+import { Flash, HrHeader, LEAVE_TYPES, useSessions, useFlash, useLeaveTypes, useMasterNames } from '../_ui';
 
 type Rule = { id: number; department: string; staff_category: string; session: string; leave_type: string; allowed: number };
 
@@ -33,6 +33,13 @@ export default function DepartmentLeavesPage() {
   async function remove(r: Rule) {
     try { await api(`/hr/department-leaves/${r.id}`, { method: 'DELETE' }); load(); } catch (ex: any) { flash(ex.message, false); }
   }
+  async function copyFrom(prev: string) {
+    try {
+      const r = await api<{ copied: number }>('/hr/department-leaves/copy', { method: 'POST', body: JSON.stringify({ from_session: prev, to_session: session }) });
+      flash(r.copied ? `Copied ${r.copied} rule(s) from ${prev}. Press Apply to Staff to set the allowances.` : `Nothing new to copy from ${prev}.`);
+      load();
+    } catch (ex: any) { flash(ex.message, false); }
+  }
   async function apply() {
     if (!confirm(`Set every active staff member's ${session} leave allowance from these rules? Extra leaves granted to individuals are added on top.`)) return;
     try {
@@ -41,7 +48,8 @@ export default function DepartmentLeavesPage() {
     } catch (ex: any) { flash(ex.message, false); }
   }
 
-  const sessions = SESSIONS.includes(session) || !session ? SESSIONS : [session, ...SESSIONS];
+  const allSessions = useSessions();
+  const sessions = allSessions.includes(session) || !session ? allSessions : [session, ...allSessions];
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -73,7 +81,11 @@ export default function DepartmentLeavesPage() {
       <div className="card p-4 overflow-x-auto">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="font-semibold text-brand-700">Rules for {session}</h3>
-          <button className="btn btn-accent text-sm" onClick={apply} disabled={!rows.length}>Apply to Staff</button>
+          <div className="flex flex-wrap gap-2">
+            {(() => { const prev = sessions[sessions.indexOf(session) - 1]; return prev ? (
+              <button className="btn bg-gray-200 text-sm" onClick={() => copyFrom(prev)}>Copy rules from {prev}</button>) : null; })()}
+            <button className="btn btn-accent text-sm" onClick={apply} disabled={!rows.length}>Apply to Staff</button>
+          </div>
         </div>
         <table className="table text-sm">
           <thead><tr><th>Department</th><th>Staff Category</th><th>Leave Type</th><th>Days</th><th></th></tr></thead>

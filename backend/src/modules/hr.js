@@ -469,6 +469,14 @@ const departmentLeaves = {
     if (!info.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   },
+  // A new session starts with last session's rules; rules the new session already has are kept.
+  copy(req, res) {
+    const from = String(req.body?.from_session || '').trim(), to = String(req.body?.to_session || '').trim();
+    if (!from || !to || from === to) return err400(res, 'Choose two different sessions');
+    const info = db.prepare(`INSERT OR IGNORE INTO hr_department_leaves (department, staff_category, session, leave_type, allowed)
+      SELECT department, staff_category, ?, leave_type, allowed FROM hr_department_leaves WHERE session = ?`).run(to, from);
+    res.json({ ok: true, copied: info.changes });
+  },
   // Writes each staff member's allowance = their department rule (+category-specific rule wins) + any extra leaves.
   apply(req, res) {
     const session = String(req.body?.session || currentSession());
@@ -1061,6 +1069,7 @@ function register(router) {
   router.get('/hr/department-leaves', auth, A, departmentLeaves.list);
   router.post('/hr/department-leaves', auth, A, safe(departmentLeaves.upsert));
   router.post('/hr/department-leaves/apply', auth, A, safe(departmentLeaves.apply));
+  router.post('/hr/department-leaves/copy', auth, A, safe(departmentLeaves.copy));
   router.delete('/hr/department-leaves/:id', auth, A, departmentLeaves.remove);
   router.get('/hr/extra-leaves', auth, S, extraLeaves.list);
   router.post('/hr/extra-leaves', auth, A, safe(extraLeaves.create));
