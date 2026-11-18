@@ -245,6 +245,13 @@ function toDate(v) {
     const y = m[3].length === 2 ? (Number(m[3]) > 50 ? 1900 : 2000) + Number(m[3]) : Number(m[3]);
     return { value: ymd(y, m[2], m[1]) || undefined };
   }
+  // 05-Mar-2010, 5 March 2010 (how Excel often saves dates in a CSV).
+  m = s.match(/^(\d{1,2})[-/. ]+([A-Za-z]{3,9})[-/., ]+(\d{2}|\d{4})$/);
+  const mon = m && ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].indexOf(m[2].slice(0, 3).toLowerCase());
+  if (m && mon >= 0) {
+    const y = m[3].length === 2 ? (Number(m[3]) > 50 ? 1900 : 2000) + Number(m[3]) : Number(m[3]);
+    return { value: ymd(y, mon + 1, m[1]) || undefined };
+  }
   return { value: undefined };
 }
 const str = (v) => (v instanceof Date ? toDate(v).value : v == null ? '' : String(v).trim());
