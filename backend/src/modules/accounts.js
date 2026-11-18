@@ -478,7 +478,7 @@ function cashShortfall(lines, date, exceptId = 0) {
       WHERE al.ledger_id = ? AND v.status = 'active' AND v.id != ? AND v.date > ? GROUP BY v.date ORDER BY v.date`).all(l.id, exceptId, date)) {
       bal = round2(bal + d.m); low = Math.min(low, bal);
     }
-    if (low < 0) return `${l.name} would go below zero (₹${low.toFixed(2)}). Enter the missing receipts first, or pay from a bank ledger.`;
+    if (low < 0) return `${l.name} would go below zero (₹${low.toFixed(2)}). Enter the missing receipts (or the opening balance of ${l.name} in Ledgers) first, or pay from a bank ledger.`;
   }
   return null;
 }
