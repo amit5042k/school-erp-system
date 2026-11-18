@@ -73,7 +73,7 @@ export default function PromotePanel() {
           items: selected.map(s => ({ student_id: s.id, result: s.result, to_class_id: s.to_class_id })),
         }),
       });
-      flash(`Done: ${r.promoted} promoted, ${r.detained} detained, ${r.passed_out} passed out.`);
+      flash(`Done: ${r.promoted} promoted, ${r.detained} detained, ${r.passed_out} passed out.${r.promoted ? ' Promoted students have new roll numbers in their new class (in name order); change them on Roll Numbers if needed. Admission numbers stay the same.' : ''}`);
       setReviewing(false);
       loadBatches();
       loadPreview(classId);

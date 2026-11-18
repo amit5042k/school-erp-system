@@ -1,6 +1,6 @@
 // Academic administration: promotion (with undo), section swap, roll numbers, teacher-wise timetable.
 const crypto = require('crypto');
-const { db, ROLES, auth, role, safe, registerReport, currentSession } = require('./_kit');
+const { db, ROLES, auth, role, safe, registerReport, currentSession, addColumn } = require('./_kit');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS academic_promotions (
@@ -19,6 +19,8 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS ix_academic_promotions_batch ON academic_promotions(batch_id);
 `);
+// The roll number a student had before the promotion, so undoing it can put it back.
+addColumn('academic_promotions', 'from_roll_no INTEGER');
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 const PRE = ['NURSERY', 'LKG', 'UKG'];
@@ -98,16 +100,27 @@ function promote(req, res) {
   }
   const batch = `P${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex')}`;
   const ins = db.prepare(`INSERT INTO academic_promotions
-    (batch_id, student_id, from_class_id, to_class_id, from_session, to_session, from_status, result, promoted_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    (batch_id, student_id, from_class_id, to_class_id, from_session, to_session, from_status, result, promoted_by, from_roll_no)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const upd = db.prepare('UPDATE students SET class_id = ?, session = ?, status = ?, status_date = ?, status_reason = ? WHERE id = ?');
   const now = new Date().toISOString();
   db.transaction(() => {
     for (const r of rows) {
       ins.run(batch, r.s.id, r.s.class_id, r.result === 'passed_out' ? null : r.to, r.s.session || from_session || null,
-        to_session, r.s.status || 'active', r.result, req.user.id);
+        to_session, r.s.status || 'active', r.result, req.user.id, r.s.roll_no ?? null);
       if (r.result === 'passed_out') upd.run(r.s.class_id, r.s.session || from_session || null, 'passed_out', now.slice(0, 10), 'Passed out', r.s.id);
       else upd.run(r.to, to_session, 'active', r.s.status_date || null, r.s.status_reason || null, r.s.id);
+    }
+    // The admission number stays with the student; the roll number belongs to the class. Promoted students get new
+    // roll numbers in their new class, in name order after anyone already there (Roll Numbers can change them).
+    const moved = rows.filter(r => r.result === 'promoted');
+    const setRoll = db.prepare('UPDATE students SET roll_no = ? WHERE id = ?');
+    for (const to of new Set(moved.map(r => r.to))) {
+      const arriving = moved.filter(r => r.to === to).map(r => r.s).sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+      const ids = new Set(arriving.map(x => x.id));
+      let next = db.prepare(`SELECT id, roll_no FROM students WHERE class_id = ? AND COALESCE(status, 'active') = 'active'`).all(to)
+        .filter(x => !ids.has(x.id)).reduce((m, x) => Math.max(m, Number(x.roll_no) || 0), 0);
+      for (const st of arriving) setRoll.run(++next, st.id);
     }
   })();
   const count = (k) => rows.filter(r => r.result === k).length;
@@ -135,8 +148,12 @@ function undo(req, res) {
   }
   const rows = db.prepare('SELECT * FROM academic_promotions WHERE batch_id = ?').all(last.batch_id);
   const upd = db.prepare('UPDATE students SET class_id = ?, session = ?, status = ? WHERE id = ?');
+  const roll = db.prepare('UPDATE students SET roll_no = ? WHERE id = ?');
   db.transaction(() => {
-    for (const r of rows) upd.run(r.from_class_id, r.from_session, r.from_status || 'active', r.student_id);
+    for (const r of rows) {
+      upd.run(r.from_class_id, r.from_session, r.from_status || 'active', r.student_id);
+      if (r.result === 'promoted') roll.run(r.from_roll_no ?? null, r.student_id);   // only promoted students were renumbered
+    }
     db.prepare('UPDATE academic_promotions SET undone_at = ? WHERE batch_id = ?').run(new Date().toISOString(), last.batch_id);
   })();
   res.json({ ok: true, batch_id: last.batch_id, restored: rows.length });
