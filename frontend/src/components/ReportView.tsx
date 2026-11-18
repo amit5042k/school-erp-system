@@ -13,7 +13,7 @@ export type ReportParam = {
 };
 export type ReportColumn = { key: string; label: string; type?: 'text' | 'number' | 'money' | 'date' | 'percent'; total?: boolean };
 type ReportResult = {
-  key: string; title: string; group: string; description?: string;
+  key: string; title: string; group: string; description?: string; message?: string; missing?: string[];
   params: ReportParam[]; columns: ReportColumn[]; values: Record<string, string>; rows: any[]; generated_at: string;
 };
 
@@ -140,7 +140,7 @@ export default function ReportView({ reportKey, initial }: { reportKey: string; 
                   <td key={c.key} className={c.type && c.type !== 'text' && c.type !== 'date' ? 'text-right' : ''}>{cell(r[c.key], c)}</td>
                 ))}</tr>
               ))}
-              {!res.rows.length && <tr><td colSpan={res.columns.length} className="text-center py-4 text-gray-500">{tr('No records for these filters.')}</td></tr>}
+              {!res.rows.length && <tr><td colSpan={res.columns.length} className="text-center py-4 text-gray-500">{res.message ? tr(res.message) : tr('No records for these filters.')}</td></tr>}
               {totals && res.rows.length > 0 && (
                 <tr className="font-semibold bg-brand-50">
                   {res.columns.map((c, i) => (

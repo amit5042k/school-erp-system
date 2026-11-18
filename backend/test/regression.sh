@@ -202,6 +202,10 @@ check "fine due before paying" "$(curl -s $B/finance/student-dues/$FST -H "$HA" 
 curl -s -X POST $B/finance/collect -H "$HA" -H "$C" -d "{\"student_id\":$FST,\"items\":[{\"fee_id\":$FID,\"amount\":400,\"fine\":50}]}" >/dev/null
 check "no second fine after paying it" "$(curl -s $B/finance/student-dues/$FST -H "$HA" | j 'x.total_fine')" 0
 curl -s -X PUT $B/finance/settings -H "$HA" -H "$C" -d "$FS" >/dev/null
+echo "--- reports that need a choice show their filters first"
+check "report without its required choice still returns filters" "$(curl -s $B/report/fee-student-ledger -H "$HA" | j "x.params.length>0&&x.rows.length===0&&/Choose Student/.test(x.message)")" true
+echo "--- right password, wrong Login As"
+check "says which Login As to choose" "$(curl -s -X POST $B/auth/login -H "$C" -d '{"username":"ADM2025001","password":"student123","role":"admin"}' | j 'x.code')" WRONG_LOGIN_AS
 echo "--- staff logins"
 check "staff with a subject start as Teacher" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ1","full_name":"Subject Teacher","subject":"Maths","official_email":"subj1@test.example"}' | j 'x.login.created.role_key')" teacher
 check "staff without a subject start as Staff" "$(curl -s -X POST $B/teachers -H "$HA" -H "$C" -d '{"employee_no":"SUBJ2","full_name":"Office Clerk","subject":"-","official_email":"subj2@test.example"}' | j 'x.login.created.role_key')" staff

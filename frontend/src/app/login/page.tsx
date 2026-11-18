@@ -15,6 +15,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('expired')) setError(t('Your session has expired. Please sign in again.'));
+    // Students and parents usually sign in on their own phone: keep the "Login As" they used last time.
+    try { const last = localStorage.getItem('erp_login_as'); if (last && ['admin', 'teacher', 'student', 'parent'].includes(last)) setRole(last); } catch { /* storage blocked */ }
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -28,6 +30,7 @@ export default function LoginPage() {
       });
       setToken(res.token);
       setUser(res.user);
+      try { localStorage.setItem('erp_login_as', role); } catch { /* storage blocked */ }
       // Phones and the installed app open on the phone-first Home screen; computers get the full dashboard.
       const app = navigator.userAgent.includes('SchoolERP-App') || window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(max-width: 640px)').matches;
       router.push(app ? '/home' : '/dashboard');

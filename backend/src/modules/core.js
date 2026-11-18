@@ -111,15 +111,19 @@ function runReport(req, res) {
   if (!r || !r.roles.includes(roleForGroup(req.user, r.group))) return res.status(404).json({ error: 'Report not found' });
   req.user = { ...req.user, role: roleForGroup(req.user, r.group) };
   const params = {};
+  const missing = [];
   for (const p of r.params) {
     const v = req.query[p.name];
     params[p.name] = v == null || v === '' ? resolveDefault(p.default) : String(v);
-    if (p.required && !params[p.name]) return res.status(400).json({ error: `${p.label || p.name} is required` });
+    if (p.required && !params[p.name]) missing.push(p.label || p.name);
   }
-  const rows = r.run(params, req.user) || [];
+  // A report opened without a required choice (a student, an exam, a ledger) still returns its filters, so the page
+  // can show them; it runs once the choice is made.
+  const rows = missing.length ? [] : r.run(params, req.user) || [];
   // Some reports (e.g. monthly registers) size their columns to the chosen filters.
   const columns = typeof r.columnsFor === 'function' ? r.columnsFor(params) : r.columns;
-  res.json({ ...meta(r), columns, params: r.params.map(p => ({ ...p, default: resolveDefault(p.default) })), values: params, rows, generated_at: new Date().toISOString() });
+  res.json({ ...meta(r), columns, params: r.params.map(p => ({ ...p, default: resolveDefault(p.default) })), values: params, rows,
+    ...(missing.length ? { missing, message: `Choose ${missing.join(', ')} and press Show` } : {}), generated_at: new Date().toISOString() });
 }
 
 /* ---------- Masters ---------- */

@@ -176,7 +176,7 @@ export default function LeavesPage() {
       )}
 
       {/* Filters */}
-      <div className="card p-4 mb-4 grid md:grid-cols-5 gap-3 text-sm">
+      <div className="card p-4 mb-4 grid sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div>
           <label className="label">Leave Status</label>
           <select className="input" value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
@@ -193,7 +193,7 @@ export default function LeavesPage() {
         </div>
         <div><label className="label">From Date</label><input type="date" className="input" value={filters.from} onChange={e => setFilters(f => ({ ...f, from: e.target.value }))} /></div>
         <div><label className="label">To Date</label><input type="date" className="input" value={filters.to} onChange={e => setFilters(f => ({ ...f, to: e.target.value }))} /></div>
-        <div className="flex items-end gap-2">
+        <div className="sm:col-span-2 md:col-span-4 flex flex-wrap items-end gap-2">
           <button className="btn btn-primary" onClick={load}>Search</button>
           <button className="btn btn-accent" onClick={downloadCsv}>Download Excel</button>
           <button className="btn bg-red-600 text-white hover:bg-red-700" onClick={() => window.print()}>Download Pdf</button>

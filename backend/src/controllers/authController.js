@@ -34,7 +34,12 @@ exports.login = (req, res) => {
   // Staff roles (principal, accountant, ...) sit on the 'teacher' base, so "staff" choices on the login form match both.
   const staffPick = role === 'admin' || role === 'teacher';
   const roleOk = !role || user.role === role || (staffPick && (user.role === 'admin' || user.role === 'teacher'));
-  if (!ok || !roleOk) return res.status(401).json({ error: 'Invalid credentials' });
+  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+  // The password is right but "Login As" is wrong: say which option to choose (only someone with the password sees this).
+  if (!roleOk) {
+    const pick = { admin: 'Administration / Office', teacher: 'Teacher / Staff', student: 'Student', parent: 'Parent' }[user.role];
+    return res.status(401).json({ error: `This is a ${user.role === 'admin' || user.role === 'teacher' ? 'staff' : user.role} login. Choose "${pick}" under Login As and sign in again.`, code: 'WRONG_LOGIN_AS', role: user.role });
+  }
   if (user.blocked_reason) return res.status(403).json({ error: `Access blocked: ${user.blocked_reason}. Please contact the school office.` });
 
   db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(new Date().toISOString(), user.id);
