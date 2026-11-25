@@ -56,4 +56,4 @@ function schedule() {
   setInterval(run, 24 * 60 * 60 * 1000).unref();
 }
 
-module.exports = { backupNow, listBackups, schedule, dir, offsiteStatus };
+module.exports = { backupNow, listBackups, schedule, dir, offsiteStatus, uploadOffsite };

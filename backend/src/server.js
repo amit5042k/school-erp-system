@@ -29,7 +29,11 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 // Before anything opens the database: keep a copy if this start is an update.
-if (process.env.BACKUP_DISABLED !== 'true') require('./utils/preUpdateBackup')();
+// Backup first, then update: if this start is an update, the data is backed up (and checked) before the new code runs;
+// if that's impossible the server stops instead. This runs even when daily backups are turned off.
+const preUpdate = require('./utils/preUpdateBackup');
+if (process.env.PRE_UPDATE_BACKUP !== 'false') preUpdate();
+setImmediate(() => preUpdate.sendOffsite());
 const routes = require('./routes');
 
 const app = express();

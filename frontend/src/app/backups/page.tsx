@@ -62,7 +62,7 @@ export default function BackupsPage() {
         <table className="table text-sm">
           <thead><tr><th>File</th><th>Created</th><th>Size</th></tr></thead>
           <tbody>
-            {rows.map(b => <tr key={b.name}><td className="font-mono text-xs">{b.name}</td><td>{fmtDateTime(b.created)}</td><td>{(b.size / 1024 / 1024).toFixed(2)} MB</td></tr>)}
+            {rows.map(b => <tr key={b.name}><td className="font-mono text-xs">{b.name}{b.name.startsWith('pre-update-') && <span className="ml-2 font-sans text-[11px] rounded bg-brand-50 text-brand-700 px-1.5 py-0.5">Before update</span>}</td><td>{fmtDateTime(b.created)}</td><td>{(b.size / 1024 / 1024).toFixed(2)} MB</td></tr>)}
             {!rows.length && <tr><td colSpan={3} className="text-center py-4 text-gray-500">No backups yet. The first automatic one runs a minute after the server starts.</td></tr>}
           </tbody>
         </table>

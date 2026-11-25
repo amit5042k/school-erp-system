@@ -4,7 +4,7 @@ set -u
 cd "$(dirname "$0")/.."
 PORT=${TEST_PORT:-5399}
 TMP=$(mktemp -d)
-export PORT DB_PATH="$TMP/test.sqlite" UPLOAD_DIR="$TMP/uploads" BACKUP_DISABLED=true TZ=Asia/Kolkata \
+export PORT DB_PATH="$TMP/test.sqlite" UPLOAD_DIR="$TMP/uploads" BACKUP_DIR="$TMP/backups" BACKUP_DISABLED=true TZ=Asia/Kolkata \
   JWT_SECRET=test-secret-0123456789abcdef CORS_ORIGIN=http://localhost:3000
 cleanup() { [ -n "${SERVER:-}" ] && kill "$SERVER" 2>/dev/null; rm -rf "$TMP"; }
 trap cleanup EXIT
@@ -26,6 +26,7 @@ export B="localhost:$PORT/api" API="http://localhost:$PORT/api"
 run "Regression (access control, validation, data integrity)" bash test/regression.sh
 run "Every report for every role" node test/reports.js
 run "Licensing (licence server and a school install)" env ISSUER_PORT=$((PORT + 1)) CLIENT_PORT=$((PORT + 2)) bash test/licence.sh
+run "Backup first, then update" env UPDATE_TEST_PORT=$((PORT + 3)) bash test/update-backup.sh
 # Last: it ends by deleting the demo staff logins the other suites sign in with.
 run "Staff roles and permissions" bash test/roles.sh
 

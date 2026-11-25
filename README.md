@@ -166,8 +166,15 @@ Deploying a new version, or adding and removing features, changes the code only:
 - On start, the server only creates missing tables and adds missing columns. Students, staff, fees, logins, passwords,
   roles, settings and editable lists are never rewritten. Default list entries are added once per list; a list you
   emptied stays empty. The first Super Admin is created only when there are no logins at all.
-- Whenever the server starts with different code than last time, it first copies the database to
-  `backups/pre-update-<date>-<time>.sqlite` (newest 10 kept), on top of the daily backups.
+- **Backup first, then update.** Whenever the server starts with different code than last time, before the new code
+  touches anything it copies the database to `backups/pre-update-<date>-<time>.sqlite` (checked to open and pass
+  SQLite's integrity check) and snapshots the uploaded files to `backups/pre-update-<date>-<time>-uploads/` (hard
+  links, so it is instant and takes no extra space). The newest 10 are kept, on top of the daily backups, and the
+  database copy also goes off-site when off-site backup is set up. They are listed on the Backups page as
+  "Before update".
+- If that backup can't be made (for example the disk is full), the update is **not applied**: the server stops with
+  "UPDATE STOPPED" in the log and your data is left exactly as it was. Free some space and restart. (Only to update
+  without a backup anyway, set `UPDATE_WITHOUT_BACKUP=true` once.)
 - Demo data is only ever loaded by `npm run seed:dev`, which you run by hand on a development machine.
 
 ## Production notes
